@@ -5,15 +5,22 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import Base, engine
+from app.database import Base, engine, async_session
 from app.routes import router
+from app.seed import seed_users
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Жизненный цикл приложения: создание таблиц при запуске."""
+    """Жизненный цикл приложения: создание таблиц и начальных данных."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Создаём тестовых пользователей при первом запуске
+    async with async_session() as session:
+        await seed_users(session)
+        await session.commit()
+
     yield
 
 
