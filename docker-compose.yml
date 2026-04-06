@@ -1,0 +1,266 @@
+version: "3.9"
+
+# DoctorsHunter CRM - Docker Compose
+# Все микросервисы, базы данных и API Gateway
+
+services:
+
+  # ============================================================
+  # API Gateway (Nginx)
+  # ============================================================
+  gateway:
+    build: ./gateway
+    ports:
+      - "80:80"
+    depends_on:
+      - auth-service
+      - clients-service
+      - services-service
+      - travel-service
+      - orders-service
+      - payments-service
+      - partners-service
+    networks:
+      - doctorshunter-net
+
+  # ============================================================
+  # Frontend (Flutter Web)
+  # ============================================================
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway
+    networks:
+      - doctorshunter-net
+
+  # ============================================================
+  # Auth Service
+  # ============================================================
+  auth-service:
+    build: ./auth-service
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@auth-db:5432/auth_db
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    networks:
+      - doctorshunter-net
+
+  auth-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_db
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doctorshunter-net
+
+  # ============================================================
+  # Clients Service
+  # ============================================================
+  clients-service:
+    build: ./clients-service
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@clients-db:5432/clients_db
+      - AUTH_SERVICE_URL=http://auth-service:8000
+    depends_on:
+      clients-db:
+        condition: service_healthy
+    networks:
+      - doctorshunter-net
+
+  clients-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: clients_db
+    volumes:
+      - clients-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doctorshunter-net
+
+  # ============================================================
+  # Services Service (каталог медицинских услуг)
+  # ============================================================
+  services-service:
+    build: ./services-service
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@services-db:5432/services_db
+    depends_on:
+      services-db:
+        condition: service_healthy
+    networks:
+      - doctorshunter-net
+
+  services-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: services_db
+    volumes:
+      - services-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doctorshunter-net
+
+  # ============================================================
+  # Travel Service (авиабилеты, отели, клиники, врачи, визы, экскурсии)
+  # ============================================================
+  travel-service:
+    build: ./travel-service
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@travel-db:5432/travel_db
+    depends_on:
+      travel-db:
+        condition: service_healthy
+    networks:
+      - doctorshunter-net
+
+  travel-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: travel_db
+    volumes:
+      - travel-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doctorshunter-net
+
+  # ============================================================
+  # Orders Service (центральный сервис заказов)
+  # ============================================================
+  orders-service:
+    build: ./orders-service
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@orders-db:5432/orders_db
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - TRAVEL_SERVICE_URL=http://travel-service:8000
+      - SERVICES_SERVICE_URL=http://services-service:8000
+      - PAYMENTS_SERVICE_URL=http://payments-service:8000
+      - CLIENTS_SERVICE_URL=http://clients-service:8000
+    depends_on:
+      orders-db:
+        condition: service_healthy
+    networks:
+      - doctorshunter-net
+
+  orders-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: orders_db
+    volumes:
+      - orders-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doctorshunter-net
+
+  # ============================================================
+  # Payments Service (оплаты и квитанции)
+  # ============================================================
+  payments-service:
+    build: ./payments-service
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@payments-db:5432/payments_db
+      - ORDERS_SERVICE_URL=http://orders-service:8000
+    depends_on:
+      payments-db:
+        condition: service_healthy
+    networks:
+      - doctorshunter-net
+
+  payments-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: payments_db
+    volumes:
+      - payments-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doctorshunter-net
+
+  # ============================================================
+  # Partners Service (B2B партнёры)
+  # ============================================================
+  partners-service:
+    build: ./partners-service
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@partners-db:5432/partners_db
+      - TRAVEL_SERVICE_URL=http://travel-service:8000
+    depends_on:
+      partners-db:
+        condition: service_healthy
+    networks:
+      - doctorshunter-net
+
+  partners-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: partners_db
+    volumes:
+      - partners-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doctorshunter-net
+
+# ============================================================
+# Volumes
+# ============================================================
+volumes:
+  auth-db-data:
+  clients-db-data:
+  services-db-data:
+  travel-db-data:
+  orders-db-data:
+  payments-db-data:
+  partners-db-data:
+
+# ============================================================
+# Networks
+# ============================================================
+networks:
+  doctorshunter-net:
+    driver: bridge
