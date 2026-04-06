@@ -122,7 +122,7 @@ class AppTheme {
       ),
 
       // Тема карточек
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: white,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -220,7 +220,7 @@ class AppTheme {
       // Тема чипов
       chipTheme: ChipThemeData(
         backgroundColor: lightBg,
-        selectedColor: primaryColor.withValues(alpha: 0.15),
+        selectedColor: primaryColor.withOpacity(0.15),
         labelStyle: GoogleFonts.inter(fontSize: 14, color: darkText),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(buttonRadius),
@@ -237,7 +237,7 @@ class AppTheme {
       ),
 
       // Тема диалогов
-      dialogTheme: DialogThemeData(
+      dialogTheme: DialogTheme(
         backgroundColor: white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(cardRadius),

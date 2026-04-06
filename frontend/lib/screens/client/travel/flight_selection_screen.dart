@@ -1,27 +1,22 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../config/theme.dart';
 import '../../../config/api_config.dart';
+import '../../../models/travel.dart';
 import '../../../services/api_service.dart';
-import 'hotel_selection_screen.dart';
 
 class FlightSelectionScreen extends StatefulWidget {
-  final List<Map<String, dynamic>> selectedServices;
-
-  const FlightSelectionScreen({
-    super.key,
-    required this.selectedServices,
-  });
+  const FlightSelectionScreen({super.key});
 
   @override
   State<FlightSelectionScreen> createState() => _FlightSelectionScreenState();
 }
 
 class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
-  List<Map<String, dynamic>> _flights = [];
+  final _api = ApiService();
+  List<Flight> _flights = [];
   int? _selectedIndex;
   bool _isLoading = true;
   String? _errorMessage;
@@ -39,26 +34,21 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
     });
 
     try {
-      final response = await ApiService.get('${ApiConfig.flightsUrl}');
+      final data = await _api.get(ApiConfig.travel, '/flights/');
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          _flights = data.cast<Map<String, dynamic>>();
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = 'Не удалось загрузить авиабилеты';
-          _isLoading = false;
-        });
-      }
+      final List<dynamic> list = data is List ? data : [];
+      setState(() {
+        _flights = list
+            .map((e) => Flight.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _isLoading = false;
+      });
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Ошибка соединения с сервером';
+          _errorMessage = 'Не удалось загрузить авиабилеты';
           _isLoading = false;
         });
       }
@@ -66,23 +56,14 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
   }
 
   void _proceed({bool skip = false}) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => HotelSelectionScreen(
-          selectedServices: widget.selectedServices,
-          selectedFlight: skip ? null : (_selectedIndex != null ? _flights[_selectedIndex!] : null),
-        ),
-      ),
-    );
+    context.go('/client/travel/hotels');
   }
 
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return '';
+  String _formatDate(DateTime date) {
     try {
-      final date = DateTime.parse(dateStr);
       return DateFormat('dd MMM yyyy, HH:mm', 'ru').format(date);
     } catch (_) {
-      return dateStr;
+      return date.toIso8601String();
     }
   }
 
@@ -92,12 +73,10 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
       backgroundColor: AppTheme.lightBg,
       appBar: AppBar(
         title: const Text('Выбор авиабилетов'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.darkText,
-        elevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor))
           : _errorMessage != null
               ? _buildError()
               : _buildContent(),
@@ -111,23 +90,18 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 64, color: AppTheme.error),
+            const Icon(Icons.error_outline,
+                size: 64, color: AppTheme.errorColor),
             const SizedBox(height: 16),
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: AppTheme.secondaryText),
+              style: const TextStyle(
+                  fontSize: 16, color: AppTheme.secondaryText),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _loadFlights,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
               child: const Text('Повторить'),
             ),
           ],
@@ -141,10 +115,11 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
       children: [
         Expanded(
           child: _flights.isEmpty
-              ? Center(
+              ? const Center(
                   child: Text(
                     'Нет доступных рейсов',
-                    style: TextStyle(fontSize: 16, color: AppTheme.secondaryText),
+                    style:
+                        TextStyle(fontSize: 16, color: AppTheme.secondaryText),
                   ),
                 )
               : ListView.builder(
@@ -156,7 +131,7 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.white,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
@@ -173,10 +148,8 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
                     onPressed: () => _proceed(skip: true),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.secondaryText,
-                      side: BorderSide(color: AppTheme.secondaryText.withOpacity(0.3)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                      side: BorderSide(
+                          color: AppTheme.secondaryText.withOpacity(0.3)),
                       minimumSize: const Size(0, 52),
                     ),
                     child: const Text(
@@ -191,18 +164,14 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
                   child: ElevatedButton(
                     onPressed: _selectedIndex != null ? _proceed : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppTheme.primary.withOpacity(0.3),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                      disabledBackgroundColor:
+                          AppTheme.primaryColor.withOpacity(0.3),
                       minimumSize: const Size(0, 52),
-                      elevation: 0,
                     ),
                     child: const Text(
                       'Далее',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -229,10 +198,10 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color: AppTheme.white,
+            borderRadius: BorderRadius.circular(AppTheme.cardRadius),
             border: Border.all(
-              color: isSelected ? AppTheme.primary : Colors.transparent,
+              color: isSelected ? AppTheme.primaryColor : Colors.transparent,
               width: 2,
             ),
             boxShadow: [
@@ -258,15 +227,16 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
                           _selectedIndex = val;
                         });
                       },
-                      activeColor: AppTheme.primary,
+                      activeColor: AppTheme.primaryColor,
                     ),
                     const SizedBox(width: 8),
-                    Icon(Icons.flight, color: AppTheme.primary, size: 20),
+                    const Icon(Icons.flight,
+                        color: AppTheme.primaryColor, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        flight['airline'] ?? 'Авиакомпания',
-                        style: TextStyle(
+                        flight.airline,
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: AppTheme.darkText,
@@ -274,17 +244,18 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.1),
+                        color: AppTheme.primaryColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        flight['flight_number'] ?? '',
-                        style: TextStyle(
+                        flight.flightNumber,
+                        style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.primary,
+                          color: AppTheme.primaryColor,
                         ),
                       ),
                     ),
@@ -297,47 +268,52 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          const Text(
                             'Откуда',
-                            style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                            style: TextStyle(
+                                fontSize: 12, color: AppTheme.secondaryText),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            flight['departure_city'] ?? '',
-                            style: TextStyle(
+                            flight.departureCity,
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: AppTheme.darkText,
                             ),
                           ),
                           Text(
-                            _formatDate(flight['departure_date']?.toString()),
-                            style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                            _formatDate(flight.departureAt),
+                            style: const TextStyle(
+                                fontSize: 12, color: AppTheme.secondaryText),
                           ),
                         ],
                       ),
                     ),
-                    Icon(Icons.arrow_forward, color: AppTheme.secondaryText, size: 20),
+                    const Icon(Icons.arrow_forward,
+                        color: AppTheme.secondaryText, size: 20),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(
+                          const Text(
                             'Куда',
-                            style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                            style: TextStyle(
+                                fontSize: 12, color: AppTheme.secondaryText),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            flight['arrival_city'] ?? '',
-                            style: TextStyle(
+                            flight.arrivalCity,
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: AppTheme.darkText,
                             ),
                           ),
                           Text(
-                            _formatDate(flight['arrival_date']?.toString()),
-                            style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                            _formatDate(flight.arrivalAt),
+                            style: const TextStyle(
+                                fontSize: 12, color: AppTheme.secondaryText),
                           ),
                         ],
                       ),
@@ -348,11 +324,11 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    '\$${flight['price'] ?? '—'}',
-                    style: TextStyle(
+                    '\$${flight.price.toStringAsFixed(0)}',
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.primary,
+                      color: AppTheme.primaryColor,
                     ),
                   ),
                 ),

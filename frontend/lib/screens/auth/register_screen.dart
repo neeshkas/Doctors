@@ -1,14 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/theme.dart';
-import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
-import '../../services/api_service.dart';
-import '../client/services_screen.dart';
-import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -23,10 +18,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
-  String? _errorMessage;
 
   @override
   void dispose() {
@@ -40,57 +33,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    final authProvider = context.read<AuthProvider>();
+    authProvider.clearError();
 
-    try {
-      final response = await ApiService.post(
-        '${ApiConfig.authUrl}/register',
-        body: {
-          'fullName': _fullNameController.text.trim(),
-          'email': _emailController.text.trim(),
-          'password': _passwordController.text,
-          'role': 'CLIENT',
-        },
-      );
+    final success = await authProvider.register(
+      _emailController.text.trim(),
+      _passwordController.text,
+      _fullNameController.text.trim(),
+    );
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        await authProvider.setToken(data['token']);
-        await authProvider.setUser(data['user']);
-
-        if (!mounted) return;
-
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const ServicesScreen()),
-          (route) => false,
-        );
-      } else {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _errorMessage = data['message'] ?? 'Ошибка регистрации';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Ошибка соединения с сервером';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+    // На успех GoRouter redirect автоматически перенаправит пользователя
+    if (!success) {
+      setState(() {});
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
       body: SafeArea(
@@ -103,16 +66,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.network(
-                    'https://doctorshunter.com/logo.svg',
+                    AppTheme.logoUrl,
                     height: 64,
                     errorBuilder: (_, __, ___) => const Icon(
                       Icons.local_hospital,
                       size: 64,
-                      color: AppTheme.primary,
+                      color: AppTheme.primaryColor,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(
+                  const Text(
                     'Регистрация',
                     style: TextStyle(
                       fontSize: 28,
@@ -121,7 +84,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
+                  const Text(
                     'Создайте аккаунт клиента',
                     style: TextStyle(
                       fontSize: 16,
@@ -131,7 +94,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 32),
                   Card(
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(AppTheme.cardRadius),
                     ),
                     elevation: 0,
                     child: Padding(
@@ -141,17 +104,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (_errorMessage != null) ...[
+                            if (authProvider.errorMessage != null) ...[
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.error.withOpacity(0.1),
+                                  color: AppTheme.errorColor.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  _errorMessage!,
-                                  style: TextStyle(
-                                    color: AppTheme.error,
+                                  authProvider.errorMessage!,
+                                  style: const TextStyle(
+                                    color: AppTheme.errorColor,
                                     fontSize: 14,
                                   ),
                                 ),
@@ -161,12 +124,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             TextFormField(
                               controller: _fullNameController,
                               textCapitalization: TextCapitalization.words,
-                              decoration: InputDecoration(
+                              decoration: const InputDecoration(
                                 labelText: 'Полное имя',
-                                prefixIcon: const Icon(Icons.person_outline),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                                prefixIcon: Icon(Icons.person_outline),
                               ),
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
@@ -179,12 +139,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             TextFormField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
-                              decoration: InputDecoration(
+                              decoration: const InputDecoration(
                                 labelText: 'Email',
-                                prefixIcon: const Icon(Icons.email_outlined),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                                prefixIcon: Icon(Icons.email_outlined),
                               ),
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
@@ -214,9 +171,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       _obscurePassword = !_obscurePassword;
                                     });
                                   },
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                               validator: (value) {
@@ -248,9 +202,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     });
                                   },
                                 ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
                               ),
                               validator: (value) {
                                 if (value != _passwordController.text) {
@@ -266,17 +217,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 vertical: 12,
                               ),
                               decoration: BoxDecoration(
-                                color: AppTheme.primary.withOpacity(0.08),
+                                color: AppTheme.primaryColor.withOpacity(0.08),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Row(
+                              child: const Row(
                                 children: [
                                   Icon(
                                     Icons.info_outline,
                                     size: 20,
-                                    color: AppTheme.primary,
+                                    color: AppTheme.primaryColor,
                                   ),
-                                  const SizedBox(width: 12),
+                                  SizedBox(width: 12),
                                   Text(
                                     'Роль: Клиент (пациент)',
                                     style: TextStyle(
@@ -291,22 +242,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             SizedBox(
                               height: 52,
                               child: ElevatedButton(
-                                onPressed: _isLoading ? null : _register,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.primary,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: _isLoading
+                                onPressed:
+                                    authProvider.isLoading ? null : _register,
+                                child: authProvider.isLoading
                                     ? const SizedBox(
                                         height: 24,
                                         width: 24,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Colors.white,
+                                          color: AppTheme.white,
                                         ),
                                       )
                                     : const Text(
@@ -327,7 +271,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
+                      const Text(
                         'Уже есть аккаунт? ',
                         style: TextStyle(
                           color: AppTheme.secondaryText,
@@ -335,17 +279,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(),
-                            ),
-                          );
-                        },
-                        child: Text(
+                        onTap: () => context.go('/login'),
+                        child: const Text(
                           'Войти',
                           style: TextStyle(
-                            color: AppTheme.primary,
+                            color: AppTheme.primaryColor,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),

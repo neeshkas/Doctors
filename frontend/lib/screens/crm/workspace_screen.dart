@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/api_config.dart';
 import '../../config/theme.dart';
-import '../../services/api_service.dart';
+import '../../models/user.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/api_service.dart';
 
 /// Экран «Мой рабочий стол» — задачи, специфичные для роли пользователя.
 /// Каждая роль видит заказы, требующие её внимания.
@@ -21,7 +24,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   bool _isLoading = true;
   String? _error;
 
-  String? _userRole;
+  UserRole? _userRole;
   String _userRoleLabel = '';
 
   @override
@@ -49,7 +52,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     });
 
     try {
-      final data = await _api.get('/orders/workspace/$_userRole');
+      final data = await _api.get(
+        ApiConfig.orders,
+        '/workspace/${_userRole!.value}',
+      );
       setState(() {
         _tasks = data['items'] as List<dynamic>? ?? data as List<dynamic>? ?? [];
         _isLoading = false;
@@ -62,8 +68,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
   }
 
-  void _openOrder(String orderId) {
-    Navigator.of(context).pushNamed('/crm/orders/$orderId');
+  void _openOrder(dynamic orderId) {
+    context.go('/crm/orders/$orderId');
   }
 
   @override
@@ -189,7 +195,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final shortId = id.length > 8 ? id.substring(0, 8) : id;
     final clients = _extractClients(task);
     final status = task['status']?.toString() ?? '';
-    final actionNeeded = _actionNeeded(task);
+    final actionNeeded = _actionNeeded();
     final createdAt = _formatDate(task['created_at']?.toString());
 
     return Card(
@@ -207,7 +213,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  color: AppTheme.primaryColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -319,7 +325,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     );
   }
 
-  // ── Утилиты ──
+  // -- Утилиты --
 
   String _extractClients(dynamic task) {
     final clients = task['clients'];
@@ -329,22 +335,22 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     return 'Клиент не указан';
   }
 
-  String _actionNeeded(dynamic task) {
+  String _actionNeeded() {
     switch (_userRole) {
-      case 'FLIGHTS_MANAGER':
+      case UserRole.flightsManager:
         return 'Требуется назначить авиабилеты';
-      case 'HOTELS_MANAGER':
+      case UserRole.hotelsManager:
         return 'Требуется назначить отель';
-      case 'CLINICS_MANAGER':
+      case UserRole.clinicsManager:
         return 'Требуется назначить клинику';
-      case 'DOCTORS_MANAGER':
+      case UserRole.doctorsManager:
         return 'Требуется назначить врача';
-      case 'VISAS_MANAGER':
+      case UserRole.visasManager:
         return 'Требуется оформить визу';
-      case 'EXCURSIONS_MANAGER':
+      case UserRole.excursionsManager:
         return 'Требуется подтвердить экскурсию';
-      case 'COORDINATOR':
-      case 'MANAGER':
+      case UserRole.coordinator:
+      case UserRole.manager:
         return 'Заказ не завершён — требуется контроль';
       default:
         return 'Требуется действие';
@@ -353,17 +359,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   IconData _taskIcon() {
     switch (_userRole) {
-      case 'FLIGHTS_MANAGER':
+      case UserRole.flightsManager:
         return Icons.flight_rounded;
-      case 'HOTELS_MANAGER':
+      case UserRole.hotelsManager:
         return Icons.hotel_rounded;
-      case 'CLINICS_MANAGER':
+      case UserRole.clinicsManager:
         return Icons.local_hospital_rounded;
-      case 'DOCTORS_MANAGER':
+      case UserRole.doctorsManager:
         return Icons.person_rounded;
-      case 'VISAS_MANAGER':
+      case UserRole.visasManager:
         return Icons.badge_rounded;
-      case 'EXCURSIONS_MANAGER':
+      case UserRole.excursionsManager:
         return Icons.tour_rounded;
       default:
         return Icons.assignment_rounded;
@@ -372,20 +378,20 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   String _taskDescription() {
     switch (_userRole) {
-      case 'FLIGHTS_MANAGER':
+      case UserRole.flightsManager:
         return 'Заказы, ожидающие назначения авиабилетов';
-      case 'HOTELS_MANAGER':
+      case UserRole.hotelsManager:
         return 'Заказы, ожидающие назначения отеля';
-      case 'CLINICS_MANAGER':
+      case UserRole.clinicsManager:
         return 'Заказы, ожидающие назначения клиники';
-      case 'DOCTORS_MANAGER':
+      case UserRole.doctorsManager:
         return 'Заказы, ожидающие назначения врача';
-      case 'VISAS_MANAGER':
+      case UserRole.visasManager:
         return 'Заказы, ожидающие оформления визы';
-      case 'EXCURSIONS_MANAGER':
+      case UserRole.excursionsManager:
         return 'Заказы, ожидающие подтверждения экскурсии';
-      case 'COORDINATOR':
-      case 'MANAGER':
+      case UserRole.coordinator:
+      case UserRole.manager:
         return 'Все незавершённые заказы';
       default:
         return 'Ваши текущие задачи';
@@ -404,26 +410,29 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
   }
 
-  String _roleLabel(String? role) {
+  String _roleLabel(UserRole? role) {
+    if (role == null) return 'Неизвестно';
     switch (role) {
-      case 'COORDINATOR':
+      case UserRole.coordinator:
         return 'Координатор';
-      case 'MANAGER':
+      case UserRole.manager:
         return 'Менеджер';
-      case 'FLIGHTS_MANAGER':
+      case UserRole.flightsManager:
         return 'Менеджер авиабилетов';
-      case 'HOTELS_MANAGER':
+      case UserRole.hotelsManager:
         return 'Менеджер отелей';
-      case 'CLINICS_MANAGER':
+      case UserRole.clinicsManager:
         return 'Менеджер клиник';
-      case 'DOCTORS_MANAGER':
+      case UserRole.doctorsManager:
         return 'Менеджер врачей';
-      case 'VISAS_MANAGER':
+      case UserRole.visasManager:
         return 'Менеджер виз';
-      case 'EXCURSIONS_MANAGER':
+      case UserRole.excursionsManager:
         return 'Менеджер экскурсий';
-      default:
-        return role ?? 'Неизвестно';
+      case UserRole.client:
+        return 'Клиент';
+      case UserRole.partner:
+        return 'Партнёр';
     }
   }
 }

@@ -1,22 +1,21 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
+import '../../models/order.dart';
 import '../../services/api_service.dart';
-import 'order_detail_screen.dart';
-import 'services_screen.dart';
 
-class OrdersScreen extends StatefulWidget {
-  const OrdersScreen({super.key});
+class ClientOrdersScreen extends StatefulWidget {
+  const ClientOrdersScreen({super.key});
 
   @override
-  State<OrdersScreen> createState() => _OrdersScreenState();
+  State<ClientOrdersScreen> createState() => _ClientOrdersScreenState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen> {
-  List<Map<String, dynamic>> _orders = [];
+class _ClientOrdersScreenState extends State<ClientOrdersScreen> {
+  final _api = ApiService();
+  List<Order> _orders = [];
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -33,68 +32,50 @@ class _OrdersScreenState extends State<OrdersScreen> {
     });
 
     try {
-      final response = await ApiService.get('${ApiConfig.ordersUrl}/my');
+      final data = await _api.get(ApiConfig.orders, '/');
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          _orders = data.cast<Map<String, dynamic>>();
-          _isLoading = false;
-        });
-      } else {
+      final List<dynamic> list = data is List ? data : [];
+      setState(() {
+        _orders = list
+            .map((e) => Order.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) {
         setState(() {
           _errorMessage = 'Не удалось загрузить заказы';
           _isLoading = false;
         });
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Ошибка соединения с сервером';
-          _isLoading = false;
-        });
-      }
     }
   }
 
-  Color _statusColor(String? status) {
-    switch (status?.toUpperCase()) {
-      case 'NEW':
-      case 'НОВЫЙ':
+  Color _statusColor(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.notPaid:
         return Colors.blue;
-      case 'CONFIRMED':
-      case 'ПОДТВЕРЖДЁН':
-        return AppTheme.primary;
-      case 'IN_PROGRESS':
-      case 'В РАБОТЕ':
+      case OrderStatus.active:
         return Colors.orange;
-      case 'COMPLETED':
-      case 'ЗАВЕРШЁН':
+      case OrderStatus.fullyPaid:
         return Colors.green;
-      case 'CANCELLED':
-      case 'ОТМЕНЁН':
-        return AppTheme.error;
-      default:
-        return AppTheme.secondaryText;
+      case OrderStatus.cancelled:
+        return AppTheme.errorColor;
     }
   }
 
-  String _statusLabel(String? status) {
-    switch (status?.toUpperCase()) {
-      case 'NEW':
-        return 'Новый';
-      case 'CONFIRMED':
-        return 'Подтверждён';
-      case 'IN_PROGRESS':
-        return 'В работе';
-      case 'COMPLETED':
-        return 'Завершён';
-      case 'CANCELLED':
+  String _statusLabel(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.notPaid:
+        return 'Не оплачен';
+      case OrderStatus.active:
+        return 'Активен';
+      case OrderStatus.fullyPaid:
+        return 'Оплачен';
+      case OrderStatus.cancelled:
         return 'Отменён';
-      default:
-        return status ?? 'Неизвестно';
     }
   }
 
@@ -104,22 +85,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
       backgroundColor: AppTheme.lightBg,
       appBar: AppBar(
         title: const Text('Мои заказы'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.darkText,
-        elevation: 0,
         actions: [
           IconButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ServicesScreen()),
-              );
-            },
-            icon: Icon(Icons.add, color: AppTheme.primary),
+            onPressed: () => context.go('/client/services'),
+            icon: const Icon(Icons.add, color: AppTheme.primaryColor),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor))
           : _errorMessage != null
               ? _buildError()
               : _buildContent(),
@@ -133,23 +108,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 64, color: AppTheme.error),
+            const Icon(Icons.error_outline,
+                size: 64, color: AppTheme.errorColor),
             const SizedBox(height: 16),
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: AppTheme.secondaryText),
+              style: const TextStyle(
+                  fontSize: 16, color: AppTheme.secondaryText),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _loadOrders,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
               child: const Text('Повторить'),
             ),
           ],
@@ -164,26 +134,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.receipt_long, size: 80, color: AppTheme.secondaryText.withOpacity(0.3)),
+            Icon(Icons.receipt_long,
+                size: 80, color: AppTheme.secondaryText.withOpacity(0.3)),
             const SizedBox(height: 16),
-            Text(
+            const Text(
               'У вас пока нет заказов',
               style: TextStyle(fontSize: 18, color: AppTheme.secondaryText),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ServicesScreen()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
+              onPressed: () => context.go('/client/services'),
               child: const Text('Выбрать услугу'),
             ),
           ],
@@ -193,7 +153,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadOrders,
-      color: AppTheme.primary,
+      color: AppTheme.primaryColor,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _orders.length,
@@ -202,25 +162,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _buildOrderCard(Map<String, dynamic> order) {
-    final status = order['status']?.toString();
-    final services = order['services'] as List<dynamic>?;
-    final totalAmount = order['total_amount'];
-    final paidAmount = order['paid_amount'];
+  Widget _buildOrderCard(Order order) {
+    final statusColor = _statusColor(order.status);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: GestureDetector(
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => OrderDetailScreen(order: order),
-            ),
-          );
+          context.go('/client/orders/${order.id}');
         },
         child: Card(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(AppTheme.cardRadius),
           ),
           elevation: 0,
           child: Padding(
@@ -231,8 +184,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 Row(
                   children: [
                     Text(
-                      'Заказ #${order['id'] ?? ''}',
-                      style: TextStyle(
+                      'Заказ #${order.id}',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: AppTheme.darkText,
@@ -240,38 +193,40 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: _statusColor(status).withOpacity(0.1),
+                        color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        _statusLabel(status),
+                        _statusLabel(order.status),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: _statusColor(status),
+                          color: statusColor,
                         ),
                       ),
                     ),
                   ],
                 ),
-                if (services != null && services.isNotEmpty) ...[
+                if (order.items.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 4,
-                    children: services.map<Widget>((s) {
-                      final name = (s is Map) ? (s['name'] ?? '') : s.toString();
+                    children: order.items.map<Widget>((item) {
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: AppTheme.lightBg,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          name,
-                          style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                          item.serviceName,
+                          style: const TextStyle(
+                              fontSize: 12, color: AppTheme.secondaryText),
                         ),
                       );
                     }).toList(),
@@ -283,13 +238,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Сумма',
-                          style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                          style: TextStyle(
+                              fontSize: 12, color: AppTheme.secondaryText),
                         ),
                         Text(
-                          '\$${totalAmount ?? '0'}',
-                          style: TextStyle(
+                          '\$${order.totalAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: AppTheme.darkText,
@@ -301,22 +257,24 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Оплачено',
-                          style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                          style: TextStyle(
+                              fontSize: 12, color: AppTheme.secondaryText),
                         ),
                         Text(
-                          '\$${paidAmount ?? '0'}',
-                          style: TextStyle(
+                          '\$${order.paidAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: AppTheme.primary,
+                            color: AppTheme.primaryColor,
                           ),
                         ),
                       ],
                     ),
                     const Spacer(),
-                    Icon(Icons.chevron_right, color: AppTheme.secondaryText),
+                    const Icon(Icons.chevron_right,
+                        color: AppTheme.secondaryText),
                   ],
                 ),
               ],

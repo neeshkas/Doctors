@@ -1,23 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../config/theme.dart';
-import 'excursion_screen.dart';
 
 class VisaScreen extends StatefulWidget {
-  final List<Map<String, dynamic>> selectedServices;
-  final Map<String, dynamic>? selectedFlight;
-  final Map<String, dynamic>? selectedHotel;
-  final Map<String, dynamic>? selectedClinic;
-  final Map<String, dynamic>? selectedDoctor;
-
-  const VisaScreen({
-    super.key,
-    required this.selectedServices,
-    this.selectedFlight,
-    this.selectedHotel,
-    this.selectedClinic,
-    this.selectedDoctor,
-  });
+  const VisaScreen({super.key});
 
   @override
   State<VisaScreen> createState() => _VisaScreenState();
@@ -27,7 +14,6 @@ class _VisaScreenState extends State<VisaScreen> {
   final _formKey = GlobalKey<FormState>();
   final _passportController = TextEditingController();
   final _notesController = TextEditingController();
-  bool _submitted = false;
 
   @override
   void dispose() {
@@ -38,28 +24,7 @@ class _VisaScreenState extends State<VisaScreen> {
 
   void _proceed() {
     if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _submitted = true;
-    });
-
-    final visaData = {
-      'passport_number': _passportController.text.trim(),
-      'notes': _notesController.text.trim(),
-    };
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ExcursionScreen(
-          selectedServices: widget.selectedServices,
-          selectedFlight: widget.selectedFlight,
-          selectedHotel: widget.selectedHotel,
-          selectedClinic: widget.selectedClinic,
-          selectedDoctor: widget.selectedDoctor,
-          visaData: visaData,
-        ),
-      ),
-    );
+    context.go('/client/travel/excursion');
   }
 
   @override
@@ -68,9 +33,6 @@ class _VisaScreenState extends State<VisaScreen> {
       backgroundColor: AppTheme.lightBg,
       appBar: AppBar(
         title: const Text('Заявка на визу'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.darkText,
-        elevation: 0,
       ),
       body: Column(
         children: [
@@ -79,7 +41,7 @@ class _VisaScreenState extends State<VisaScreen> {
               padding: const EdgeInsets.all(16),
               child: Card(
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(AppTheme.cardRadius),
                 ),
                 elevation: 0,
                 child: Padding(
@@ -92,13 +54,15 @@ class _VisaScreenState extends State<VisaScreen> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: AppTheme.primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(16),
+                            color: AppTheme.primaryColor.withOpacity(0.08),
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.buttonRadius),
                           ),
-                          child: Row(
+                          child: const Row(
                             children: [
-                              Icon(Icons.info_outline, color: AppTheme.primary, size: 24),
-                              const SizedBox(width: 12),
+                              Icon(Icons.info_outline,
+                                  color: AppTheme.primaryColor, size: 24),
+                              SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   'Для поездки в Корею вам потребуется виза. Заполните данные ниже, и мы поможем с оформлением.',
@@ -112,7 +76,7 @@ class _VisaScreenState extends State<VisaScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        Text(
+                        const Text(
                           'Номер паспорта',
                           style: TextStyle(
                             fontSize: 14,
@@ -123,12 +87,9 @@ class _VisaScreenState extends State<VisaScreen> {
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _passportController,
-                          decoration: InputDecoration(
+                          decoration: const InputDecoration(
                             hintText: 'Введите номер паспорта',
-                            prefixIcon: const Icon(Icons.badge_outlined),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                            prefixIcon: Icon(Icons.badge_outlined),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
@@ -138,7 +99,7 @@ class _VisaScreenState extends State<VisaScreen> {
                           },
                         ),
                         const SizedBox(height: 20),
-                        Text(
+                        const Text(
                           'Примечания',
                           style: TextStyle(
                             fontSize: 14,
@@ -150,11 +111,9 @@ class _VisaScreenState extends State<VisaScreen> {
                         TextFormField(
                           controller: _notesController,
                           maxLines: 4,
-                          decoration: InputDecoration(
-                            hintText: 'Дополнительная информация (необязательно)',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                          decoration: const InputDecoration(
+                            hintText:
+                                'Дополнительная информация (необязательно)',
                           ),
                         ),
                       ],
@@ -167,7 +126,7 @@ class _VisaScreenState extends State<VisaScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.white,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.05),
@@ -181,19 +140,11 @@ class _VisaScreenState extends State<VisaScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _submitted ? null : _proceed,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: AppTheme.primary.withOpacity(0.3),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
+                  onPressed: _proceed,
                   child: const Text(
                     'Далее',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),

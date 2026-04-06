@@ -1,14 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/theme.dart';
-import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
-import '../../services/api_service.dart';
-import 'register_screen.dart';
-import '../client/services_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,9 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
   bool _obscurePassword = true;
-  String? _errorMessage;
 
   @override
   void dispose() {
@@ -35,59 +28,27 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    final authProvider = context.read<AuthProvider>();
+    authProvider.clearError();
 
-    try {
-      final response = await ApiService.post(
-        '${ApiConfig.authUrl}/login',
-        body: {
-          'email': _emailController.text.trim(),
-          'password': _passwordController.text,
-        },
-      );
+    final success = await authProvider.login(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        await authProvider.setToken(data['token']);
-        await authProvider.setUser(data['user']);
-
-        if (!mounted) return;
-
-        final role = data['user']['role'] ?? 'CLIENT';
-        if (role == 'CLIENT') {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const ServicesScreen()),
-          );
-        } else {
-          Navigator.of(context).pushReplacementNamed('/admin/dashboard');
-        }
-      } else {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _errorMessage = data['message'] ?? 'Ошибка входа';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Ошибка соединения с сервером';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+    // На успех GoRouter redirect автоматически перенаправит пользователя
+    if (!success) {
+      // Ошибка отображается через authProvider.errorMessage
+      setState(() {});
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
       body: SafeArea(
@@ -100,16 +61,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.network(
-                    'https://doctorshunter.com/logo.svg',
+                    AppTheme.logoUrl,
                     height: 80,
                     errorBuilder: (_, __, ___) => const Icon(
                       Icons.local_hospital,
                       size: 80,
-                      color: AppTheme.primary,
+                      color: AppTheme.primaryColor,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(
+                  const Text(
                     'DoctorsHunter',
                     style: TextStyle(
                       fontSize: 28,
@@ -118,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
+                  const Text(
                     'Войдите в личный кабинет',
                     style: TextStyle(
                       fontSize: 16,
@@ -128,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 32),
                   Card(
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(AppTheme.cardRadius),
                     ),
                     elevation: 0,
                     child: Padding(
@@ -138,17 +99,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (_errorMessage != null) ...[
+                            if (authProvider.errorMessage != null) ...[
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.error.withOpacity(0.1),
+                                  color: AppTheme.errorColor.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  _errorMessage!,
-                                  style: TextStyle(
-                                    color: AppTheme.error,
+                                  authProvider.errorMessage!,
+                                  style: const TextStyle(
+                                    color: AppTheme.errorColor,
                                     fontSize: 14,
                                   ),
                                 ),
@@ -158,12 +119,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextFormField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
-                              decoration: InputDecoration(
+                              decoration: const InputDecoration(
                                 labelText: 'Email',
-                                prefixIcon: const Icon(Icons.email_outlined),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                                prefixIcon: Icon(Icons.email_outlined),
                               ),
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
@@ -194,9 +152,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                     });
                                   },
                                 ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
                               ),
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
@@ -209,22 +164,15 @@ class _LoginScreenState extends State<LoginScreen> {
                             SizedBox(
                               height: 52,
                               child: ElevatedButton(
-                                onPressed: _isLoading ? null : _login,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.primary,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: _isLoading
+                                onPressed:
+                                    authProvider.isLoading ? null : _login,
+                                child: authProvider.isLoading
                                     ? const SizedBox(
                                         height: 24,
                                         width: 24,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Colors.white,
+                                          color: AppTheme.white,
                                         ),
                                       )
                                     : const Text(
@@ -245,7 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
+                      const Text(
                         'Нет аккаунта? ',
                         style: TextStyle(
                           color: AppTheme.secondaryText,
@@ -253,17 +201,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const RegisterScreen(),
-                            ),
-                          );
-                        },
-                        child: Text(
+                        onTap: () => context.go('/register'),
+                        child: const Text(
                           'Зарегистрироваться',
                           style: TextStyle(
-                            color: AppTheme.primary,
+                            color: AppTheme.primaryColor,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),

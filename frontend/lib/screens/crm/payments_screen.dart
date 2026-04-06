@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../config/api_config.dart';
 import '../../config/theme.dart';
 import '../../services/api_service.dart';
 
@@ -49,7 +51,11 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       if (_searchQuery.isNotEmpty) {
         params['order_id'] = _searchQuery;
       }
-      final data = await _api.get('/receipts', queryParams: params);
+      final data = await _api.get(
+        ApiConfig.payments,
+        '/receipts',
+        queryParams: params.isNotEmpty ? params : null,
+      );
       setState(() {
         _receipts =
             data['items'] as List<dynamic>? ?? data as List<dynamic>? ?? [];
@@ -70,7 +76,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     });
 
     try {
-      final data = await _api.get('/payments/summaries');
+      final data = await _api.get(ApiConfig.payments, '/summaries');
       setState(() {
         _orderSummaries =
             data['items'] as List<dynamic>? ?? data as List<dynamic>? ?? [];
@@ -91,8 +97,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     _fetchReceipts();
   }
 
-  void _openOrder(String orderId) {
-    Navigator.of(context).pushNamed('/crm/orders/$orderId');
+  void _openOrder(dynamic orderId) {
+    context.go('/crm/orders/$orderId');
   }
 
   @override
@@ -444,7 +450,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -507,7 +513,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     );
   }
 
-  // ── Утилиты ──
+  // -- Утилиты --
 
   double _toDouble(dynamic value) {
     if (value is num) return value.toDouble();

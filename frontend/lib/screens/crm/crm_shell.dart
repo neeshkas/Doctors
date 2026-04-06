@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/theme.dart';
+import '../../models/user.dart';
 import '../../providers/auth_provider.dart';
 
 /// Навигационный элемент бокового меню CRM.
@@ -9,13 +11,13 @@ class _NavItem {
   final String label;
   final IconData icon;
   final String route;
-  final List<String>? allowedRoles;
+  final bool adminOnly;
 
   const _NavItem({
     required this.label,
     required this.icon,
     required this.route,
-    this.allowedRoles,
+    this.adminOnly = false,
   });
 }
 
@@ -49,7 +51,7 @@ class _CrmShellState extends State<CrmShell> {
       route: '/crm/orders',
     ),
     _NavItem(
-      label: 'Мой рабочий стол',
+      label: 'Рабочий стол',
       icon: Icons.dashboard_rounded,
       route: '/crm/workspace',
     ),
@@ -62,34 +64,33 @@ class _CrmShellState extends State<CrmShell> {
       label: 'Пользователи',
       icon: Icons.people_rounded,
       route: '/crm/users',
-      allowedRoles: ['COORDINATOR', 'MANAGER'],
+      adminOnly: true,
     ),
   ];
 
   void _navigateTo(String route) {
     if (route != widget.currentRoute) {
-      Navigator.of(context).pushReplacementNamed(route);
+      context.go(route);
     }
   }
 
   void _logout() {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     auth.logout();
-    Navigator.of(context).pushReplacementNamed('/login');
+    context.go('/login');
   }
 
-  bool _isItemVisible(_NavItem item, String? userRole) {
-    if (item.allowedRoles == null) return true;
-    return item.allowedRoles!.contains(userRole);
+  bool _isItemVisible(_NavItem item, User? user) {
+    if (!item.adminOnly) return true;
+    return user != null && user.isAdmin;
   }
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isNarrow = screenWidth < _responsiveBreakpoint;
-    final auth = Provider.of<AuthProvider>(context);
+    final auth = context.watch<AuthProvider>();
     final user = auth.currentUser;
-    final userRole = user?.role;
 
     if (isNarrow) {
       return Scaffold(
@@ -102,9 +103,9 @@ class _CrmShellState extends State<CrmShell> {
         drawer: Drawer(
           backgroundColor: AppTheme.darkText,
           child: _buildSidebarContent(
-            userRole: userRole,
+            user: user,
             userName: user?.fullName ?? 'Пользователь',
-            userRoleLabel: _roleLabel(userRole),
+            userRoleLabel: _roleLabel(user?.role),
             isCollapsed: false,
             isDrawer: true,
           ),
@@ -122,9 +123,9 @@ class _CrmShellState extends State<CrmShell> {
             child: Material(
               color: AppTheme.darkText,
               child: _buildSidebarContent(
-                userRole: userRole,
+                user: user,
                 userName: user?.fullName ?? 'Пользователь',
-                userRoleLabel: _roleLabel(userRole),
+                userRoleLabel: _roleLabel(user?.role),
                 isCollapsed: _isCollapsed,
                 isDrawer: false,
               ),
@@ -137,7 +138,7 @@ class _CrmShellState extends State<CrmShell> {
   }
 
   Widget _buildSidebarContent({
-    required String? userRole,
+    required User? user,
     required String userName,
     required String userRoleLabel,
     required bool isCollapsed,
@@ -152,10 +153,15 @@ class _CrmShellState extends State<CrmShell> {
           child: Row(
             children: [
               if (!isCollapsed) ...[
-                const Icon(
-                  Icons.local_hospital_rounded,
-                  color: AppTheme.primaryColor,
-                  size: 32,
+                Image.network(
+                  AppTheme.logoUrl,
+                  width: 32,
+                  height: 32,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.local_hospital_rounded,
+                    color: AppTheme.primaryColor,
+                    size: 32,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
@@ -171,12 +177,17 @@ class _CrmShellState extends State<CrmShell> {
                 ),
               ],
               if (isCollapsed)
-                const Expanded(
+                Expanded(
                   child: Center(
-                    child: Icon(
-                      Icons.local_hospital_rounded,
-                      color: AppTheme.primaryColor,
-                      size: 28,
+                    child: Image.network(
+                      AppTheme.logoUrl,
+                      width: 28,
+                      height: 28,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.local_hospital_rounded,
+                        color: AppTheme.primaryColor,
+                        size: 28,
+                      ),
                     ),
                   ),
                 ),
@@ -204,7 +215,7 @@ class _CrmShellState extends State<CrmShell> {
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             children: _navItems
-                .where((item) => _isItemVisible(item, userRole))
+                .where((item) => _isItemVisible(item, user))
                 .map((item) => _buildNavTile(item, isCollapsed, isDrawer))
                 .toList(),
           ),
@@ -300,7 +311,7 @@ class _CrmShellState extends State<CrmShell> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
         color: isActive
-            ? AppTheme.primaryColor.withValues(alpha: 0.15)
+            ? AppTheme.primaryColor.withOpacity(0.15)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
@@ -345,26 +356,29 @@ class _CrmShellState extends State<CrmShell> {
     );
   }
 
-  String _roleLabel(String? role) {
+  String _roleLabel(UserRole? role) {
+    if (role == null) return 'Неизвестно';
     switch (role) {
-      case 'COORDINATOR':
+      case UserRole.coordinator:
         return 'Координатор';
-      case 'MANAGER':
+      case UserRole.manager:
         return 'Менеджер';
-      case 'FLIGHTS_MANAGER':
+      case UserRole.flightsManager:
         return 'Менеджер авиабилетов';
-      case 'HOTELS_MANAGER':
+      case UserRole.hotelsManager:
         return 'Менеджер отелей';
-      case 'CLINICS_MANAGER':
+      case UserRole.clinicsManager:
         return 'Менеджер клиник';
-      case 'DOCTORS_MANAGER':
+      case UserRole.doctorsManager:
         return 'Менеджер врачей';
-      case 'VISAS_MANAGER':
+      case UserRole.visasManager:
         return 'Менеджер виз';
-      case 'EXCURSIONS_MANAGER':
+      case UserRole.excursionsManager:
         return 'Менеджер экскурсий';
-      default:
-        return role ?? 'Неизвестно';
+      case UserRole.client:
+        return 'Клиент';
+      case UserRole.partner:
+        return 'Партнёр';
     }
   }
 }

@@ -3,10 +3,27 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
-
 import '../providers/auth_provider.dart';
 import '../models/user.dart';
+
+import '../screens/auth/login_screen.dart';
+import '../screens/auth/register_screen.dart';
+import '../screens/client/services_screen.dart';
+import '../screens/client/travel/flight_selection_screen.dart';
+import '../screens/client/travel/hotel_selection_screen.dart';
+import '../screens/client/travel/clinic_selection_screen.dart';
+import '../screens/client/travel/doctor_selection_screen.dart';
+import '../screens/client/travel/visa_screen.dart';
+import '../screens/client/travel/excursion_screen.dart';
+import '../screens/client/checkout_screen.dart';
+import '../screens/client/orders_screen.dart';
+import '../screens/client/order_detail_screen.dart';
+import '../screens/crm/crm_shell.dart';
+import '../screens/crm/orders_list_screen.dart';
+import '../screens/crm/order_detail_screen.dart';
+import '../screens/crm/workspace_screen.dart';
+import '../screens/crm/payments_screen.dart';
+import '../screens/crm/users_screen.dart';
 
 // ============================================================
 // Заглушки экранов — будут заменены реальными виджетами
@@ -26,122 +43,7 @@ class _PlaceholderScreen extends StatelessWidget {
   }
 }
 
-/// Оболочка CRM с боковой навигацией
-class _CrmShell extends StatelessWidget {
-  final Widget child;
-  const _CrmShell({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
-    final user = authProvider.currentUser;
-    final currentPath = GoRouterState.of(context).uri.path;
-
-    // Определяем выбранный пункт меню по текущему пути
-    int selectedIndex = 0;
-    if (currentPath.startsWith('/crm/orders')) {
-      selectedIndex = 0;
-    } else if (currentPath.startsWith('/crm/workspace')) {
-      selectedIndex = 1;
-    } else if (currentPath.startsWith('/crm/payments')) {
-      selectedIndex = 2;
-    } else if (currentPath.startsWith('/crm/users')) {
-      selectedIndex = 3;
-    }
-
-    // Пункты навигации
-    final destinations = <NavigationRailDestination>[
-      const NavigationRailDestination(
-        icon: Icon(Icons.list_alt_outlined),
-        selectedIcon: Icon(Icons.list_alt),
-        label: Text('Заказы'),
-      ),
-      const NavigationRailDestination(
-        icon: Icon(Icons.work_outline),
-        selectedIcon: Icon(Icons.work),
-        label: Text('Рабочее место'),
-      ),
-      const NavigationRailDestination(
-        icon: Icon(Icons.payment_outlined),
-        selectedIcon: Icon(Icons.payment),
-        label: Text('Платежи'),
-      ),
-      // Управление пользователями — только для администраторов
-      if (user != null && user.isAdmin)
-        const NavigationRailDestination(
-          icon: Icon(Icons.people_outline),
-          selectedIcon: Icon(Icons.people),
-          label: Text('Пользователи'),
-        ),
-    ];
-
-    // Ограничиваем индекс количеством доступных пунктов
-    if (selectedIndex >= destinations.length) {
-      selectedIndex = 0;
-    }
-
-    return Scaffold(
-      body: Row(
-        children: [
-          NavigationRail(
-            extended: MediaQuery.of(context).size.width > 1200,
-            selectedIndex: selectedIndex,
-            onDestinationSelected: (index) {
-              switch (index) {
-                case 0:
-                  context.go('/crm/orders');
-                case 1:
-                  context.go('/crm/workspace');
-                case 2:
-                  context.go('/crm/payments');
-                case 3:
-                  context.go('/crm/users');
-              }
-            },
-            leading: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Column(
-                children: [
-                  // Логотип (сетевое изображение)
-                  Image.network(
-                    'https://doctorshunter.com/logo.svg',
-                    width: 40,
-                    height: 40,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.local_hospital,
-                      size: 40,
-                      color: Color(0xFF40BCA0),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ),
-            trailing: Expanded(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: IconButton(
-                    icon: const Icon(Icons.logout),
-                    tooltip: 'Выйти',
-                    onPressed: () {
-                      authProvider.logout();
-                      context.go('/login');
-                    },
-                  ),
-                ),
-              ),
-            ),
-            destinations: destinations,
-          ),
-          const VerticalDivider(thickness: 1, width: 1),
-          Expanded(child: child),
-        ],
-      ),
-    );
-  }
-}
+// _CrmShell removed — using CrmShell from '../screens/crm/crm_shell.dart'
 
 /// Создание роутера приложения
 GoRouter createRouter(AuthProvider authProvider) {
@@ -205,13 +107,13 @@ GoRouter createRouter(AuthProvider authProvider) {
         path: '/login',
         name: 'login',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Вход в систему'),
+            const LoginScreen(),
       ),
       GoRoute(
         path: '/register',
         name: 'register',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Регистрация'),
+            const RegisterScreen(),
       ),
 
       // ============================================================
@@ -221,75 +123,82 @@ GoRouter createRouter(AuthProvider authProvider) {
         path: '/client/services',
         name: 'clientServices',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Выбор услуг'),
+            const ServicesScreen(),
       ),
       GoRoute(
         path: '/client/travel/flights',
         name: 'clientFlights',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Выбор перелёта'),
+            const FlightSelectionScreen(),
       ),
       GoRoute(
         path: '/client/travel/hotels',
         name: 'clientHotels',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Выбор отеля'),
+            const HotelSelectionScreen(),
       ),
       GoRoute(
         path: '/client/travel/clinics',
         name: 'clientClinics',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Выбор клиники'),
+            const ClinicSelectionScreen(),
       ),
       GoRoute(
         path: '/client/travel/doctors',
         name: 'clientDoctors',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Выбор врача'),
+            const DoctorSelectionScreen(),
       ),
       GoRoute(
         path: '/client/travel/visa',
         name: 'clientVisa',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Визовая заявка'),
+            const VisaScreen(),
       ),
       GoRoute(
         path: '/client/travel/excursion',
         name: 'clientExcursion',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Подтверждение экскурсии'),
+            const ExcursionScreen(),
       ),
       GoRoute(
         path: '/client/checkout',
         name: 'clientCheckout',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Оформление заказа'),
+            const CheckoutScreen(),
       ),
       GoRoute(
         path: '/client/orders',
         name: 'clientOrders',
         builder: (context, state) =>
-            const _PlaceholderScreen(title: 'Мои заказы'),
+            const ClientOrdersScreen(),
+      ),
+      GoRoute(
+        path: '/client/orders/:id',
+        name: 'clientOrderDetail',
+        builder: (context, state) {
+          final orderId = state.pathParameters['id'] ?? '';
+          return ClientOrderDetailScreen(orderId: orderId);
+        },
       ),
 
       // ============================================================
       // CRM интерфейс (с боковой навигацией)
       // ============================================================
       ShellRoute(
-        builder: (context, state, child) => _CrmShell(child: child),
+        builder: (context, state, child) => CrmShell(child: child, currentRoute: state.uri.path),
         routes: [
           GoRoute(
             path: '/crm/orders',
             name: 'crmOrders',
             builder: (context, state) =>
-                const _PlaceholderScreen(title: 'Панель заказов'),
+                const OrdersListScreen(),
             routes: [
               GoRoute(
                 path: ':id',
                 name: 'crmOrderDetail',
                 builder: (context, state) {
-                  final orderId = state.pathParameters['id'] ?? '';
-                  return _PlaceholderScreen(title: 'Заказ #$orderId');
+                  return const OrderDetailScreen();
                 },
               ),
             ],
@@ -298,19 +207,19 @@ GoRouter createRouter(AuthProvider authProvider) {
             path: '/crm/workspace',
             name: 'crmWorkspace',
             builder: (context, state) =>
-                const _PlaceholderScreen(title: 'Рабочее место'),
+                const WorkspaceScreen(),
           ),
           GoRoute(
             path: '/crm/payments',
             name: 'crmPayments',
             builder: (context, state) =>
-                const _PlaceholderScreen(title: 'Платежи'),
+                const PaymentsScreen(),
           ),
           GoRoute(
             path: '/crm/users',
             name: 'crmUsers',
             builder: (context, state) =>
-                const _PlaceholderScreen(title: 'Управление пользователями'),
+                const UsersScreen(),
           ),
         ],
       ),

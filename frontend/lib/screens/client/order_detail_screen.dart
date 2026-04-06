@@ -1,329 +1,403 @@
 import 'package:flutter/material.dart';
 
 import '../../config/theme.dart';
+import '../../config/api_config.dart';
+import '../../models/order.dart';
+import '../../services/api_service.dart';
 
-class OrderDetailScreen extends StatelessWidget {
-  final Map<String, dynamic> order;
+class ClientOrderDetailScreen extends StatefulWidget {
+  final String orderId;
 
-  const OrderDetailScreen({super.key, required this.order});
+  const ClientOrderDetailScreen({super.key, required this.orderId});
 
-  Color _statusColor(String? status) {
-    switch (status?.toUpperCase()) {
-      case 'NEW':
-      case 'НОВЫЙ':
+  @override
+  State<ClientOrderDetailScreen> createState() => _ClientOrderDetailScreenState();
+}
+
+class _ClientOrderDetailScreenState extends State<ClientOrderDetailScreen> {
+  final _api = ApiService();
+  Order? _order;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrder();
+  }
+
+  Future<void> _loadOrder() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final data = await _api.get(ApiConfig.orders, '/${widget.orderId}');
+
+      if (!mounted) return;
+
+      setState(() {
+        _order = Order.fromJson(data as Map<String, dynamic>);
+        _isLoading = false;
+      });
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.message;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Ошибка загрузки заказа';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Color _statusColor(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.notPaid:
         return Colors.blue;
-      case 'CONFIRMED':
-      case 'ПОДТВЕРЖДЁН':
-        return AppTheme.primary;
-      case 'IN_PROGRESS':
-      case 'В РАБОТЕ':
+      case OrderStatus.active:
         return Colors.orange;
-      case 'COMPLETED':
-      case 'ЗАВЕРШЁН':
+      case OrderStatus.fullyPaid:
         return Colors.green;
-      case 'CANCELLED':
-      case 'ОТМЕНЁН':
-        return AppTheme.error;
-      default:
-        return AppTheme.secondaryText;
+      case OrderStatus.cancelled:
+        return AppTheme.errorColor;
     }
   }
 
-  String _statusLabel(String? status) {
-    switch (status?.toUpperCase()) {
-      case 'NEW':
-        return 'Новый';
-      case 'CONFIRMED':
-        return 'Подтверждён';
-      case 'IN_PROGRESS':
-        return 'В работе';
-      case 'COMPLETED':
-        return 'Завершён';
-      case 'CANCELLED':
+  String _statusLabel(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.notPaid:
+        return 'Не оплачен';
+      case OrderStatus.active:
+        return 'Активен';
+      case OrderStatus.fullyPaid:
+        return 'Оплачен';
+      case OrderStatus.cancelled:
         return 'Отменён';
-      default:
-        return status ?? 'Неизвестно';
     }
-  }
-
-  double _toDouble(dynamic value) {
-    if (value == null) return 0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    return double.tryParse(value.toString()) ?? 0;
   }
 
   @override
   Widget build(BuildContext context) {
-    final status = order['status']?.toString();
-    final totalAmount = _toDouble(order['total_amount']);
-    final paidAmount = _toDouble(order['paid_amount']);
-    final remaining = totalAmount - paidAmount;
-    final services = order['services'] as List<dynamic>?;
-    final flight = order['flight'] as Map<String, dynamic>?;
-    final hotel = order['hotel'] as Map<String, dynamic>?;
-    final clinic = order['clinic'] as Map<String, dynamic>?;
-    final doctor = order['doctor'] as Map<String, dynamic>?;
-    final visa = order['visa'] as Map<String, dynamic>?;
-    final excursion = order['excursion'] as Map<String, dynamic>?;
-    final receipts = order['receipts'] as List<dynamic>?;
-
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
       appBar: AppBar(
-        title: Text('Заказ #${order['id'] ?? ''}'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.darkText,
-        elevation: 0,
+        title: Text('Заказ #${widget.orderId}'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor))
+          : _errorMessage != null
+              ? _buildError()
+              : _order != null
+                  ? _buildContent(_order!)
+                  : const SizedBox.shrink(),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Status card
+            const Icon(Icons.error_outline,
+                size: 64, color: AppTheme.errorColor),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 16, color: AppTheme.secondaryText),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _loadOrder,
+              child: const Text('Повторить'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(Order order) {
+    final statusColor = _statusColor(order.status);
+    final remaining = order.remainingAmount;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Статус
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+            ),
+            elevation: 0,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.buttonRadius),
+                    ),
+                    child: Icon(
+                      Icons.receipt_long,
+                      color: statusColor,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Заказ #${order.id}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.darkText,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _statusLabel(order.status),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Услуги
+          if (order.items.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildSectionTitle('Услуги'),
             Card(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(AppTheme.cardRadius),
               ),
               elevation: 0,
               child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: _statusColor(status).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        Icons.receipt_long,
-                        color: _statusColor(status),
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: order.items.map<Widget>((item) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
                         children: [
-                          Text(
-                            'Заказ #${order['id'] ?? ''}',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.darkText,
+                          const Icon(Icons.check_circle,
+                              size: 18, color: AppTheme.primaryColor),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              item.serviceName,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: AppTheme.darkText,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _statusColor(status).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              _statusLabel(status),
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: _statusColor(status),
-                              ),
+                          Text(
+                            '\$${item.price.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primaryColor,
                             ),
                           ),
                         ],
                       ),
-                    ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+
+          // Клиенты
+          if (order.clients.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildSectionTitle('Клиенты'),
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+              ),
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: order.clients.map<Widget>((client) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          Icon(
+                            client.isPrimary
+                                ? Icons.star
+                                : Icons.person_outline,
+                            size: 18,
+                            color: client.isPrimary
+                                ? Colors.amber
+                                : AppTheme.secondaryText,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            client.clientName,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: AppTheme.darkText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+
+          // Информация о поездке
+          if (order.requiresTravel) ...[
+            const SizedBox(height: 16),
+            _buildSectionTitle('Информация о поездке'),
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+              ),
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    if (order.flightId != null)
+                      _buildDetailRow(
+                        Icons.flight,
+                        'Рейс',
+                        'ID: ${order.flightId}',
+                      ),
+                    if (order.hotelId != null)
+                      _buildDetailRow(
+                        Icons.hotel,
+                        'Отель',
+                        'ID: ${order.hotelId}',
+                      ),
+                    if (order.clinicId != null)
+                      _buildDetailRow(
+                        Icons.local_hospital,
+                        'Клиника',
+                        'ID: ${order.clinicId}',
+                      ),
+                    if (order.doctorId != null)
+                      _buildDetailRow(
+                        Icons.person,
+                        'Врач',
+                        'ID: ${order.doctorId}',
+                      ),
+                    if (order.visaId != null)
+                      _buildDetailRow(
+                        Icons.badge,
+                        'Виза',
+                        'ID: ${order.visaId}',
+                      ),
+                    if (order.excursionConfirmed)
+                      _buildDetailRow(
+                        Icons.tour,
+                        'Экскурсия',
+                        'Подтверждена',
+                      ),
                   ],
                 ),
               ),
             ),
+          ],
 
-            // Services
-            if (services != null && services.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildSectionTitle('Услуги'),
-              Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                elevation: 0,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: services.map<Widget>((s) {
-                      final name = (s is Map) ? (s['name'] ?? '') : s.toString();
-                      final price = (s is Map) ? s['price'] : null;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          children: [
-                            Icon(Icons.check_circle, size: 18, color: AppTheme.primary),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                name,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: AppTheme.darkText,
-                                ),
-                              ),
-                            ),
-                            if (price != null)
-                              Text(
-                                '\$$price',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.primary,
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
+          // Оплата
+          const SizedBox(height: 16),
+          _buildSectionTitle('Оплата'),
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+            ),
+            elevation: 0,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  _buildPaymentRow(
+                      'Итого', order.totalAmount, AppTheme.darkText),
+                  const SizedBox(height: 12),
+                  _buildPaymentRow(
+                      'Оплачено', order.paidAmount, AppTheme.primaryColor),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Divider(),
                   ),
-                ),
-              ),
-            ],
-
-            // Travel info
-            if (flight != null || hotel != null || clinic != null || doctor != null || visa != null || excursion != null) ...[
-              const SizedBox(height: 16),
-              _buildSectionTitle('Информация о поездке'),
-              Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                elevation: 0,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      if (flight != null)
-                        _buildDetailRow(
-                          Icons.flight,
-                          'Рейс',
-                          '${flight['airline'] ?? ''} ${flight['flight_number'] ?? ''}\n${flight['departure_city'] ?? ''} — ${flight['arrival_city'] ?? ''}',
-                        ),
-                      if (hotel != null)
-                        _buildDetailRow(
-                          Icons.hotel,
-                          'Отель',
-                          '${hotel['name'] ?? ''}\n${hotel['city'] ?? ''}',
-                        ),
-                      if (clinic != null)
-                        _buildDetailRow(
-                          Icons.local_hospital,
-                          'Клиника',
-                          '${clinic['name'] ?? ''}\n${clinic['city'] ?? ''}',
-                        ),
-                      if (doctor != null)
-                        _buildDetailRow(
-                          Icons.person,
-                          'Врач',
-                          '${doctor['name'] ?? ''}\n${doctor['specialization'] ?? ''}',
-                        ),
-                      if (visa != null)
-                        _buildDetailRow(
-                          Icons.badge,
-                          'Виза',
-                          'Паспорт: ${visa['passport_number'] ?? ''}',
-                        ),
-                      if (excursion != null)
-                        _buildDetailRow(
-                          Icons.tour,
-                          'Экскурсия',
-                          excursion['name'] ?? '',
-                        ),
-                    ],
+                  _buildPaymentRow(
+                    'Осталось',
+                    remaining,
+                    remaining > 0 ? AppTheme.errorColor : Colors.green,
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
+          ),
 
-            // Payment summary
+          // Заметки
+          if (order.notes != null && order.notes!.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _buildSectionTitle('Оплата'),
+            _buildSectionTitle('Заметки'),
             Card(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(AppTheme.cardRadius),
               ),
               elevation: 0,
               child: Padding(
                 padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    _buildPaymentRow('Итого', totalAmount, AppTheme.darkText),
-                    const SizedBox(height: 12),
-                    _buildPaymentRow('Оплачено', paidAmount, AppTheme.primary),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(),
-                    ),
-                    _buildPaymentRow(
-                      'Осталось',
-                      remaining,
-                      remaining > 0 ? AppTheme.error : Colors.green,
-                    ),
-                  ],
+                child: Text(
+                  order.notes!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.darkText,
+                  ),
                 ),
               ),
             ),
-
-            // Receipts
-            if (receipts != null && receipts.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildSectionTitle('Квитанции'),
-              ...receipts.map<Widget>((receipt) {
-                final r = receipt as Map<String, dynamic>;
-                return Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 8,
-                    ),
-                    leading: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.receipt, color: AppTheme.primary, size: 22),
-                    ),
-                    title: Text(
-                      r['description'] ?? 'Квитанция #${r['id'] ?? ''}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.darkText,
-                      ),
-                    ),
-                    subtitle: Text(
-                      r['date'] ?? '',
-                      style: TextStyle(color: AppTheme.secondaryText, fontSize: 13),
-                    ),
-                    trailing: Text(
-                      '\$${r['amount'] ?? '0'}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ],
-
-            const SizedBox(height: 24),
           ],
-        ),
+
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }
@@ -333,7 +407,7 @@ class OrderDetailScreen extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8, left: 4),
       child: Text(
         title,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w700,
           color: AppTheme.darkText,
@@ -351,10 +425,10 @@ class OrderDetailScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.1),
+              color: AppTheme.primaryColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: AppTheme.primary, size: 20),
+            child: Icon(icon, color: AppTheme.primaryColor, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -363,7 +437,7 @@ class OrderDetailScreen extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 12,
                     color: AppTheme.secondaryText,
                   ),
@@ -371,7 +445,7 @@ class OrderDetailScreen extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14,
                     color: AppTheme.darkText,
                   ),
@@ -390,7 +464,7 @@ class OrderDetailScreen extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 16,
             color: AppTheme.secondaryText,
           ),

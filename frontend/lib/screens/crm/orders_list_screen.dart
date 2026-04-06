@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../config/api_config.dart';
 import '../../config/theme.dart';
 import '../../services/api_service.dart';
-import '../../providers/auth_provider.dart';
 
 /// Мастер-панель заказов — главный экран CRM.
 /// Отображает таблицу всех заказов с фильтрами, пагинацией и цветными статусами.
@@ -70,8 +70,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
         params['search'] = _searchQuery;
       }
 
-      final response = await _api.get('/orders', queryParams: params);
-      final data = response;
+      final data = await _api.get(ApiConfig.orders, '/', queryParams: params);
 
       setState(() {
         _orders = data['items'] as List<dynamic>? ?? [];
@@ -109,8 +108,8 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     _fetchOrders();
   }
 
-  void _openOrder(String orderId) {
-    Navigator.of(context).pushNamed('/crm/orders/$orderId');
+  void _openOrder(dynamic orderId) {
+    context.go('/crm/orders/$orderId');
   }
 
   @override
@@ -231,7 +230,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline, size: 48, color: AppTheme.errorColor),
+          const Icon(Icons.error_outline, size: 48, color: AppTheme.errorColor),
           const SizedBox(height: 12),
           Text(_error!, style: const TextStyle(color: AppTheme.errorColor)),
           const SizedBox(height: 12),
@@ -501,7 +500,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     }).toList();
   }
 
-  // ── Утилиты ──
+  // -- Утилиты --
 
   String _extractClients(dynamic order) {
     final clients = order['clients'];

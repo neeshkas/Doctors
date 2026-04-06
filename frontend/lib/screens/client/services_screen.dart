@@ -1,12 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
+import '../../models/service.dart';
 import '../../services/api_service.dart';
-import 'travel/flight_selection_screen.dart';
-import 'checkout_screen.dart';
 
 class ServicesScreen extends StatefulWidget {
   const ServicesScreen({super.key});
@@ -16,17 +14,19 @@ class ServicesScreen extends StatefulWidget {
 }
 
 class _ServicesScreenState extends State<ServicesScreen> {
-  List<Map<String, dynamic>> _services = [];
-  final Set<int> _selectedIndices = {};
+  final _api = ApiService();
+  List<MedicalService> _services = [];
+  final Set<int> _selectedIds = {};
   bool _isLoading = true;
   String? _errorMessage;
 
   static const _serviceIcons = <String, IconData>{
-    'Онлайн-консультация': Icons.video_call,
-    'Офлайн-консультация': Icons.people,
-    'Чекап в Корее': Icons.health_and_safety,
-    'Лечение в Корее': Icons.local_hospital,
-    'Обследование в Корее': Icons.biotech,
+    'diagnostics': Icons.biotech,
+    'treatment': Icons.local_hospital,
+    'surgery': Icons.healing,
+    'consultation': Icons.video_call,
+    'rehabilitation': Icons.spa,
+    'other': Icons.medical_services,
   };
 
   @override
@@ -42,26 +42,21 @@ class _ServicesScreenState extends State<ServicesScreen> {
     });
 
     try {
-      final response = await ApiService.get('${ApiConfig.servicesUrl}');
+      final data = await _api.get(ApiConfig.services, '/');
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          _services = data.cast<Map<String, dynamic>>();
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = 'Не удалось загрузить услуги';
-          _isLoading = false;
-        });
-      }
+      final List<dynamic> list = data is List ? data : [];
+      setState(() {
+        _services = list
+            .map((e) => MedicalService.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _isLoading = false;
+      });
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Ошибка соединения с сервером';
+          _errorMessage = 'Ошибка загрузки услуг';
           _isLoading = false;
         });
       }
@@ -69,35 +64,20 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   bool get _anySelectedRequiresTravel {
-    for (final idx in _selectedIndices) {
-      if (_services[idx]['requires_travel'] == true) {
-        return true;
-      }
-    }
-    return false;
+    return _services
+        .where((s) => _selectedIds.contains(s.id))
+        .any((s) => s.requiresTravel);
   }
 
-  List<Map<String, dynamic>> get _selectedServices {
-    return _selectedIndices.map((i) => _services[i]).toList();
+  List<MedicalService> get _selectedServices {
+    return _services.where((s) => _selectedIds.contains(s.id)).toList();
   }
 
   void _proceed() {
     if (_anySelectedRequiresTravel) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => FlightSelectionScreen(
-            selectedServices: _selectedServices,
-          ),
-        ),
-      );
+      context.go('/client/travel/flights');
     } else {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => CheckoutScreen(
-            selectedServices: _selectedServices,
-          ),
-        ),
-      );
+      context.go('/client/checkout');
     }
   }
 
@@ -107,12 +87,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
       backgroundColor: AppTheme.lightBg,
       appBar: AppBar(
         title: const Text('Выберите услугу'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.darkText,
-        elevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor))
           : _errorMessage != null
               ? _buildError()
               : _buildContent(),
@@ -126,23 +104,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 64, color: AppTheme.error),
+            const Icon(Icons.error_outline,
+                size: 64, color: AppTheme.errorColor),
             const SizedBox(height: 16),
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: AppTheme.secondaryText),
+              style: const TextStyle(
+                  fontSize: 16, color: AppTheme.secondaryText),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _loadServices,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
               child: const Text('Повторить'),
             ),
           ],
@@ -171,16 +144,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   childAspectRatio: 1.1,
                 ),
                 itemCount: _services.length,
-                itemBuilder: (context, index) => _buildServiceCard(index),
+                itemBuilder: (context, index) =>
+                    _buildServiceCard(_services[index]),
               );
             },
           ),
         ),
-        if (_selectedIndices.isNotEmpty)
+        if (_selectedIds.isNotEmpty)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.white,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.05),
@@ -195,16 +169,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 height: 52,
                 child: ElevatedButton(
                   onPressed: _proceed,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
                   child: Text(
-                    'Далее (${_selectedIndices.length})',
+                    'Далее (${_selectedIds.length})',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -218,38 +184,34 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 
-  Widget _buildServiceCard(int index) {
-    final service = _services[index];
-    final name = service['name'] ?? '';
-    final description = service['description'] ?? '';
-    final price = service['price'];
-    final requiresTravel = service['requires_travel'] == true;
-    final isSelected = _selectedIndices.contains(index);
-    final icon = _serviceIcons[name] ?? Icons.medical_services;
+  Widget _buildServiceCard(MedicalService service) {
+    final isSelected = _selectedIds.contains(service.id);
+    final icon =
+        _serviceIcons[service.category.value] ?? Icons.medical_services;
 
     return GestureDetector(
       onTap: () {
         setState(() {
           if (isSelected) {
-            _selectedIndices.remove(index);
+            _selectedIds.remove(service.id);
           } else {
-            _selectedIndices.add(index);
+            _selectedIds.add(service.id);
           }
         });
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
+          color: AppTheme.white,
+          borderRadius: BorderRadius.circular(AppTheme.cardRadius),
           border: Border.all(
-            color: isSelected ? AppTheme.primary : Colors.transparent,
+            color: isSelected ? AppTheme.primaryColor : Colors.transparent,
             width: 2,
           ),
           boxShadow: [
             BoxShadow(
               color: isSelected
-                  ? AppTheme.primary.withOpacity(0.15)
+                  ? AppTheme.primaryColor.withOpacity(0.15)
                   : Colors.black.withOpacity(0.04),
               blurRadius: isSelected ? 16 : 8,
               offset: const Offset(0, 4),
@@ -266,22 +228,24 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
+                      color: AppTheme.primaryColor.withOpacity(0.1),
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.buttonRadius),
                     ),
-                    child: Icon(icon, color: AppTheme.primary, size: 28),
+                    child:
+                        Icon(icon, color: AppTheme.primaryColor, size: 28),
                   ),
                   const Spacer(),
                   if (isSelected)
                     Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.primaryColor,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
                         Icons.check,
-                        color: Colors.white,
+                        color: AppTheme.white,
                         size: 18,
                       ),
                     ),
@@ -289,8 +253,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                name,
-                style: TextStyle(
+                service.name,
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.darkText,
@@ -301,8 +265,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
               const SizedBox(height: 4),
               Expanded(
                 child: Text(
-                  description,
-                  style: TextStyle(
+                  service.description ?? '',
+                  style: const TextStyle(
                     fontSize: 13,
                     color: AppTheme.secondaryText,
                   ),
@@ -313,17 +277,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  if (price != null)
-                    Text(
-                      '\$$price',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primary,
-                      ),
+                  Text(
+                    '\$${service.basePrice.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryColor,
                     ),
+                  ),
                   const Spacer(),
-                  if (requiresTravel)
+                  if (service.requiresTravel)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -336,7 +299,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.flight, size: 14, color: Colors.orange[700]),
+                          Icon(Icons.flight,
+                              size: 14, color: Colors.orange[700]),
                           const SizedBox(width: 4),
                           Text(
                             'Путешествие',

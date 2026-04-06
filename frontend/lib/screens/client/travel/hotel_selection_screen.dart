@@ -1,28 +1,21 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../config/theme.dart';
 import '../../../config/api_config.dart';
+import '../../../models/travel.dart';
 import '../../../services/api_service.dart';
-import 'clinic_selection_screen.dart';
 
 class HotelSelectionScreen extends StatefulWidget {
-  final List<Map<String, dynamic>> selectedServices;
-  final Map<String, dynamic>? selectedFlight;
-
-  const HotelSelectionScreen({
-    super.key,
-    required this.selectedServices,
-    this.selectedFlight,
-  });
+  const HotelSelectionScreen({super.key});
 
   @override
   State<HotelSelectionScreen> createState() => _HotelSelectionScreenState();
 }
 
 class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
-  List<Map<String, dynamic>> _hotels = [];
+  final _api = ApiService();
+  List<Hotel> _hotels = [];
   int? _selectedIndex;
   bool _isLoading = true;
   String? _errorMessage;
@@ -40,26 +33,21 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
     });
 
     try {
-      final response = await ApiService.get('${ApiConfig.hotelsUrl}');
+      final data = await _api.get(ApiConfig.travel, '/hotels/');
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          _hotels = data.cast<Map<String, dynamic>>();
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = 'Не удалось загрузить отели';
-          _isLoading = false;
-        });
-      }
+      final List<dynamic> list = data is List ? data : [];
+      setState(() {
+        _hotels = list
+            .map((e) => Hotel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _isLoading = false;
+      });
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Ошибка соединения с сервером';
+          _errorMessage = 'Не удалось загрузить отели';
           _isLoading = false;
         });
       }
@@ -67,19 +55,11 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
   }
 
   void _proceed({bool skip = false}) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ClinicSelectionScreen(
-          selectedServices: widget.selectedServices,
-          selectedFlight: widget.selectedFlight,
-          selectedHotel: skip ? null : (_selectedIndex != null ? _hotels[_selectedIndex!] : null),
-        ),
-      ),
-    );
+    context.go('/client/travel/clinics');
   }
 
-  Widget _buildStars(dynamic stars) {
-    final count = (stars is int) ? stars : int.tryParse(stars?.toString() ?? '') ?? 0;
+  Widget _buildStars(int? stars) {
+    final count = stars ?? 0;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(
@@ -99,12 +79,10 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
       backgroundColor: AppTheme.lightBg,
       appBar: AppBar(
         title: const Text('Выбор отеля'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.darkText,
-        elevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor))
           : _errorMessage != null
               ? _buildError()
               : _buildContent(),
@@ -118,23 +96,18 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 64, color: AppTheme.error),
+            const Icon(Icons.error_outline,
+                size: 64, color: AppTheme.errorColor),
             const SizedBox(height: 16),
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: AppTheme.secondaryText),
+              style: const TextStyle(
+                  fontSize: 16, color: AppTheme.secondaryText),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _loadHotels,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
               child: const Text('Повторить'),
             ),
           ],
@@ -148,10 +121,11 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
       children: [
         Expanded(
           child: _hotels.isEmpty
-              ? Center(
+              ? const Center(
                   child: Text(
                     'Нет доступных отелей',
-                    style: TextStyle(fontSize: 16, color: AppTheme.secondaryText),
+                    style:
+                        TextStyle(fontSize: 16, color: AppTheme.secondaryText),
                   ),
                 )
               : ListView.builder(
@@ -163,7 +137,7 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.white,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
@@ -180,13 +154,12 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
                     onPressed: () => _proceed(skip: true),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.secondaryText,
-                      side: BorderSide(color: AppTheme.secondaryText.withOpacity(0.3)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                      side: BorderSide(
+                          color: AppTheme.secondaryText.withOpacity(0.3)),
                       minimumSize: const Size(0, 52),
                     ),
-                    child: const Text('Пропустить', style: TextStyle(fontSize: 16)),
+                    child:
+                        const Text('Пропустить', style: TextStyle(fontSize: 16)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -195,18 +168,14 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
                   child: ElevatedButton(
                     onPressed: _selectedIndex != null ? _proceed : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppTheme.primary.withOpacity(0.3),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                      disabledBackgroundColor:
+                          AppTheme.primaryColor.withOpacity(0.3),
                       minimumSize: const Size(0, 52),
-                      elevation: 0,
                     ),
                     child: const Text(
                       'Далее',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -233,10 +202,10 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color: AppTheme.white,
+            borderRadius: BorderRadius.circular(AppTheme.cardRadius),
             border: Border.all(
-              color: isSelected ? AppTheme.primary : Colors.transparent,
+              color: isSelected ? AppTheme.primaryColor : Colors.transparent,
               width: 2,
             ),
             boxShadow: [
@@ -262,7 +231,7 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
                           _selectedIndex = val;
                         });
                       },
-                      activeColor: AppTheme.primary,
+                      activeColor: AppTheme.primaryColor,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -270,15 +239,15 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            hotel['name'] ?? 'Отель',
-                            style: TextStyle(
+                            hotel.name,
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
                               color: AppTheme.darkText,
                             ),
                           ),
                           const SizedBox(height: 4),
-                          _buildStars(hotel['stars']),
+                          _buildStars(hotel.stars),
                         ],
                       ),
                     ),
@@ -287,19 +256,22 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Icon(Icons.location_on, size: 16, color: AppTheme.secondaryText),
+                    const Icon(Icons.location_on,
+                        size: 16, color: AppTheme.secondaryText),
                     const SizedBox(width: 4),
                     Text(
-                      hotel['city'] ?? '',
-                      style: TextStyle(fontSize: 14, color: AppTheme.secondaryText),
+                      hotel.city,
+                      style: const TextStyle(
+                          fontSize: 14, color: AppTheme.secondaryText),
                     ),
                   ],
                 ),
-                if (hotel['description'] != null) ...[
+                if (hotel.description != null) ...[
                   const SizedBox(height: 8),
                   Text(
-                    hotel['description'],
-                    style: TextStyle(fontSize: 13, color: AppTheme.secondaryText),
+                    hotel.description!,
+                    style: const TextStyle(
+                        fontSize: 13, color: AppTheme.secondaryText),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -308,11 +280,11 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    '\$${hotel['price_per_night'] ?? '—'} / ночь',
-                    style: TextStyle(
+                    '\$${hotel.pricePerNight.toStringAsFixed(0)} / ночь',
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.primary,
+                      color: AppTheme.primaryColor,
                     ),
                   ),
                 ),

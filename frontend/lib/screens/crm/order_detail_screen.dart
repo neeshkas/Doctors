@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/api_config.dart';
 import '../../config/theme.dart';
-import '../../services/api_service.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/api_service.dart';
 
 /// Экран детализации заказа.
 /// Разбит на секции: клиенты, услуги, путешествие, оплаты, заметки.
 /// Редактирование — inline (внутри карточки), без модальных окон.
 class OrderDetailScreen extends StatefulWidget {
-  final String orderId;
-
-  const OrderDetailScreen({super.key, required this.orderId});
+  const OrderDetailScreen({super.key});
 
   @override
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -21,8 +21,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final ApiService _api = ApiService();
 
   Map<String, dynamic>? _order;
+  List<dynamic> _receipts = [];
   bool _isLoading = true;
   String? _error;
+
+  String _orderId = '';
 
   // Inline-редактирование — какое поле сейчас редактируется
   String? _editingField;
@@ -36,9 +39,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   String _receiptMethod = 'card';
 
   @override
-  void initState() {
-    super.initState();
-    _fetchOrder();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newId = GoRouterState.of(context).pathParameters['id'] ?? '';
+    if (newId != _orderId) {
+      _orderId = newId;
+      _fetchOrder();
+    }
   }
 
   @override
@@ -50,15 +57,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _fetchOrder() async {
+    if (_orderId.isEmpty) return;
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      final data = await _api.get('/orders/${widget.orderId}');
+      final data = await _api.get(ApiConfig.orders, '/$_orderId');
+      List<dynamic> receipts = [];
+      try {
+        final receiptsData =
+            await _api.get(ApiConfig.payments, '/by-order/$_orderId');
+        receipts = receiptsData is List
+            ? receiptsData
+            : (receiptsData['items'] as List<dynamic>? ?? []);
+      } catch (_) {
+        // Квитанции могут быть недоступны — не блокируем загрузку заказа
+      }
+
       setState(() {
         _order = data;
+        _receipts = receipts;
         _notesController.text = data['notes']?.toString() ?? '';
         _isLoading = false;
       });
@@ -72,7 +93,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Future<void> _saveField(String field, dynamic value) async {
     try {
-      await _api.patch('/orders/${widget.orderId}', body: {field: value});
+      await _api.put(ApiConfig.orders, '/$_orderId', body: {field: value});
       setState(() => _editingField = null);
       _fetchOrder();
       if (mounted) {
@@ -103,7 +124,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
 
     try {
-      await _api.post('/orders/${widget.orderId}/receipts', body: {
+      await _api.post(ApiConfig.payments, '/by-order/$_orderId', body: {
         'amount': amount,
         'method': _receiptMethod,
       });
@@ -130,24 +151,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final user = auth.currentUser;
     if (user == null) return false;
-    // Делегируем проверку модели User
-    try {
-      return user.canEditField(fieldName);
-    } catch (_) {
-      // Fallback: координатор и менеджер могут редактировать всё
-      final role = user.role;
-      if (role == 'COORDINATOR' || role == 'MANAGER') return true;
-      // Специализированные менеджеры могут редактировать своё поле
-      final roleFieldMap = {
-        'FLIGHTS_MANAGER': 'flight',
-        'HOTELS_MANAGER': 'hotel',
-        'CLINICS_MANAGER': 'clinic',
-        'DOCTORS_MANAGER': 'doctor',
-        'VISAS_MANAGER': 'visa',
-        'EXCURSIONS_MANAGER': 'excursion',
-      };
-      return roleFieldMap[role] == fieldName;
-    }
+    return user.canEditField(fieldName);
   }
 
   @override
@@ -183,9 +187,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     final order = _order!;
     final status = order['status']?.toString() ?? '';
-    final shortId = widget.orderId.length > 8
-        ? widget.orderId.substring(0, 8)
-        : widget.orderId;
+    final shortId = _orderId.length > 8
+        ? _orderId.substring(0, 8)
+        : _orderId;
 
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
@@ -199,7 +203,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.arrow_back_rounded),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () => context.go('/crm/orders'),
                   tooltip: 'Назад к списку',
                 ),
                 const SizedBox(width: 8),
@@ -233,7 +237,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  // ── Статус-бейдж ──
+  // -- Статус-бейдж --
 
   Widget _buildStatusBadge(String status) {
     Color bgColor;
@@ -284,7 +288,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  // ── Секция: Клиенты ──
+  // -- Секция: Клиенты --
 
   Widget _buildClientsSection(Map<String, dynamic> order) {
     final clients = order['clients'] as List<dynamic>? ?? [];
@@ -309,7 +313,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       CircleAvatar(
                         radius: 18,
                         backgroundColor:
-                            AppTheme.primaryColor.withValues(alpha: 0.12),
+                            AppTheme.primaryColor.withOpacity(0.12),
                         child: Text(
                           name.toString().isNotEmpty
                               ? name.toString()[0].toUpperCase()
@@ -356,7 +360,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  // ── Секция: Услуги ──
+  // -- Секция: Услуги --
 
   Widget _buildServicesSection(Map<String, dynamic> order) {
     final items =
@@ -436,7 +440,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         Expanded(
                           flex: 2,
                           child: Text(
-                            '${price} \$',
+                            '$price \$',
                             textAlign: TextAlign.end,
                           ),
                         ),
@@ -449,7 +453,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  // ── Секция: Путешествие ──
+  // -- Секция: Путешествие --
 
   Widget _buildTravelSection(Map<String, dynamic> order) {
     return _sectionCard(
@@ -462,7 +466,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             icon: Icons.flight_rounded,
             value: order['flight_details']?.toString(),
             assigned: order['flight_id'] != null,
-            fieldName: 'flight',
+            fieldName: 'flights',
             currentValue: order['flight_id']?.toString() ?? '',
           ),
           const Divider(height: 24),
@@ -471,7 +475,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             icon: Icons.hotel_rounded,
             value: order['hotel_details']?.toString(),
             assigned: order['hotel_id'] != null,
-            fieldName: 'hotel',
+            fieldName: 'hotels',
             currentValue: order['hotel_id']?.toString() ?? '',
           ),
           const Divider(height: 24),
@@ -480,7 +484,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             icon: Icons.local_hospital_rounded,
             value: order['clinic_details']?.toString(),
             assigned: order['clinic_id'] != null,
-            fieldName: 'clinic',
+            fieldName: 'clinics',
             currentValue: order['clinic_id']?.toString() ?? '',
           ),
           const Divider(height: 24),
@@ -489,7 +493,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             icon: Icons.person_rounded,
             value: order['doctor_details']?.toString(),
             assigned: order['doctor_id'] != null,
-            fieldName: 'doctor',
+            fieldName: 'doctors',
             currentValue: order['doctor_id']?.toString() ?? '',
           ),
           const Divider(height: 24),
@@ -499,7 +503,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             value: _visaLabel(order['visa_status']?.toString() ?? ''),
             assigned: order['visa_status'] != null &&
                 order['visa_status'].toString().isNotEmpty,
-            fieldName: 'visa',
+            fieldName: 'visas',
             currentValue: order['visa_status']?.toString() ?? '',
           ),
           const Divider(height: 24),
@@ -606,7 +610,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _buildExcursionRow(Map<String, dynamic> order) {
     final confirmed = order['excursion_confirmed'] == true;
-    final canEdit = _canEdit('excursion');
+    final canEdit = _canEdit('excursions');
 
     return Row(
       children: [
@@ -648,14 +652,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  // ── Секция: Оплаты ──
+  // -- Секция: Оплаты --
 
   Widget _buildPaymentsSection(Map<String, dynamic> order) {
     final totalAmount = _toDouble(order['total_amount']);
     final paidAmount = _toDouble(order['paid_amount']);
     final remaining = totalAmount - paidAmount;
     final overpayment = remaining < 0 ? remaining.abs() : 0.0;
-    final receipts = order['receipts'] as List<dynamic>? ?? [];
 
     return _sectionCard(
       title: 'Оплаты',
@@ -668,15 +671,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             spacing: 32,
             runSpacing: 12,
             children: [
-              _summaryItem('Всего', '${_formatMoney(totalAmount)}'),
-              _summaryItem('Оплачено', '${_formatMoney(paidAmount)}'),
+              _summaryItem('Всего', _formatMoney(totalAmount)),
+              _summaryItem('Оплачено', _formatMoney(paidAmount)),
               if (remaining > 0)
                 _summaryItem(
-                    'Остаток', '${_formatMoney(remaining)}',
+                    'Остаток', _formatMoney(remaining),
                     color: AppTheme.errorColor),
               if (overpayment > 0)
                 _summaryItem(
-                    'Переплата', '${_formatMoney(overpayment)}',
+                    'Переплата', _formatMoney(overpayment),
                     color: const Color(0xFF0D7A4E)),
             ],
           ),
@@ -692,13 +695,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
           const SizedBox(height: 8),
 
-          if (receipts.isEmpty)
+          if (_receipts.isEmpty)
             const Text(
               'Нет квитанций',
               style: TextStyle(color: AppTheme.secondaryText, fontSize: 13),
             )
           else
-            ...receipts.map<Widget>((receipt) {
+            ..._receipts.map<Widget>((receipt) {
               final amount = _toDouble(receipt['amount']);
               final method = receipt['method']?.toString() ?? '—';
               final status = receipt['status']?.toString() ?? '—';
@@ -865,7 +868,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  // ── Секция: Заметки ──
+  // -- Секция: Заметки --
 
   Widget _buildNotesSection(Map<String, dynamic> order) {
     return _sectionCard(
@@ -892,7 +895,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  // ── Общая обёртка секции ──
+  // -- Общая обёртка секции --
 
   Widget _sectionCard({
     required String title,
@@ -926,7 +929,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  // ── Утилиты ──
+  // -- Утилиты --
 
   double _toDouble(dynamic value) {
     if (value is num) return value.toDouble();

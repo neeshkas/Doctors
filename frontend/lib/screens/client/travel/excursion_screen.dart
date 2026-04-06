@@ -1,36 +1,21 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../config/theme.dart';
 import '../../../config/api_config.dart';
+import '../../../models/travel.dart';
 import '../../../services/api_service.dart';
-import '../checkout_screen.dart';
 
 class ExcursionScreen extends StatefulWidget {
-  final List<Map<String, dynamic>> selectedServices;
-  final Map<String, dynamic>? selectedFlight;
-  final Map<String, dynamic>? selectedHotel;
-  final Map<String, dynamic>? selectedClinic;
-  final Map<String, dynamic>? selectedDoctor;
-  final Map<String, dynamic>? visaData;
-
-  const ExcursionScreen({
-    super.key,
-    required this.selectedServices,
-    this.selectedFlight,
-    this.selectedHotel,
-    this.selectedClinic,
-    this.selectedDoctor,
-    this.visaData,
-  });
+  const ExcursionScreen({super.key});
 
   @override
   State<ExcursionScreen> createState() => _ExcursionScreenState();
 }
 
 class _ExcursionScreenState extends State<ExcursionScreen> {
-  List<Map<String, dynamic>> _excursions = [];
+  final _api = ApiService();
+  List<Excursion> _excursions = [];
   int? _selectedIndex;
   bool _wantsExcursion = false;
   bool _isLoading = true;
@@ -49,26 +34,21 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
     });
 
     try {
-      final response = await ApiService.get('${ApiConfig.excursionsUrl}');
+      final data = await _api.get(ApiConfig.travel, '/excursions/');
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          _excursions = data.cast<Map<String, dynamic>>();
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = 'Не удалось загрузить экскурсии';
-          _isLoading = false;
-        });
-      }
+      final List<dynamic> list = data is List ? data : [];
+      setState(() {
+        _excursions = list
+            .map((e) => Excursion.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _isLoading = false;
+      });
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Ошибка соединения с сервером';
+          _errorMessage = 'Не удалось загрузить экскурсии';
           _isLoading = false;
         });
       }
@@ -76,21 +56,7 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
   }
 
   void _proceed() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CheckoutScreen(
-          selectedServices: widget.selectedServices,
-          selectedFlight: widget.selectedFlight,
-          selectedHotel: widget.selectedHotel,
-          selectedClinic: widget.selectedClinic,
-          selectedDoctor: widget.selectedDoctor,
-          visaData: widget.visaData,
-          selectedExcursion: (_wantsExcursion && _selectedIndex != null)
-              ? _excursions[_selectedIndex!]
-              : null,
-        ),
-      ),
-    );
+    context.go('/client/checkout');
   }
 
   @override
@@ -99,12 +65,10 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
       backgroundColor: AppTheme.lightBg,
       appBar: AppBar(
         title: const Text('Экскурсия по городу'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.darkText,
-        elevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor))
           : _errorMessage != null
               ? _buildError()
               : _buildContent(),
@@ -118,23 +82,18 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 64, color: AppTheme.error),
+            const Icon(Icons.error_outline,
+                size: 64, color: AppTheme.errorColor),
             const SizedBox(height: 16),
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: AppTheme.secondaryText),
+              style: const TextStyle(
+                  fontSize: 16, color: AppTheme.secondaryText),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _loadExcursions,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
               child: const Text('Повторить'),
             ),
           ],
@@ -153,7 +112,7 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
               children: [
                 Card(
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(AppTheme.cardRadius),
                   ),
                   elevation: 0,
                   child: Padding(
@@ -170,13 +129,13 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
                               }
                             });
                           },
-                          activeColor: AppTheme.primary,
+                          activeColor: AppTheme.primaryColor,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Expanded(
+                        const Expanded(
                           child: Text(
                             'Хочу добавить экскурсию по городу',
                             style: TextStyle(
@@ -193,11 +152,12 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
                 if (_wantsExcursion) ...[
                   const SizedBox(height: 8),
                   if (_excursions.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(24),
+                    const Padding(
+                      padding: EdgeInsets.all(24),
                       child: Text(
                         'Нет доступных экскурсий',
-                        style: TextStyle(fontSize: 16, color: AppTheme.secondaryText),
+                        style: TextStyle(
+                            fontSize: 16, color: AppTheme.secondaryText),
                       ),
                     )
                   else
@@ -213,7 +173,7 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.white,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
@@ -227,15 +187,12 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: (!_wantsExcursion || _selectedIndex != null) ? _proceed : null,
+                onPressed: (!_wantsExcursion || _selectedIndex != null)
+                    ? _proceed
+                    : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: AppTheme.primary.withOpacity(0.3),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
+                  disabledBackgroundColor:
+                      AppTheme.primaryColor.withOpacity(0.3),
                 ),
                 child: const Text(
                   'Далее',
@@ -264,10 +221,10 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color: AppTheme.white,
+            borderRadius: BorderRadius.circular(AppTheme.cardRadius),
             border: Border.all(
-              color: isSelected ? AppTheme.primary : Colors.transparent,
+              color: isSelected ? AppTheme.primaryColor : Colors.transparent,
               width: 2,
             ),
             boxShadow: [
@@ -291,16 +248,18 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
                       _selectedIndex = val;
                     });
                   },
-                  activeColor: AppTheme.primary,
+                  activeColor: AppTheme.primaryColor,
                 ),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
+                    color: AppTheme.primaryColor.withOpacity(0.1),
+                    borderRadius:
+                        BorderRadius.circular(AppTheme.buttonRadius),
                   ),
-                  child: Icon(Icons.tour, color: AppTheme.primary, size: 24),
+                  child: const Icon(Icons.tour,
+                      color: AppTheme.primaryColor, size: 24),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -308,18 +267,19 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        excursion['name'] ?? 'Экскурсия',
-                        style: TextStyle(
+                        excursion.name,
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: AppTheme.darkText,
                         ),
                       ),
-                      if (excursion['description'] != null) ...[
+                      if (excursion.description != null) ...[
                         const SizedBox(height: 4),
                         Text(
-                          excursion['description'],
-                          style: TextStyle(fontSize: 13, color: AppTheme.secondaryText),
+                          excursion.description!,
+                          style: const TextStyle(
+                              fontSize: 13, color: AppTheme.secondaryText),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -327,21 +287,34 @@ class _ExcursionScreenState extends State<ExcursionScreen> {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          if (excursion['duration'] != null) ...[
-                            Icon(Icons.schedule, size: 14, color: AppTheme.secondaryText),
+                          if (excursion.durationHours != null) ...[
+                            const Icon(Icons.schedule,
+                                size: 14, color: AppTheme.secondaryText),
                             const SizedBox(width: 4),
                             Text(
-                              excursion['duration'],
-                              style: TextStyle(fontSize: 13, color: AppTheme.secondaryText),
+                              '${excursion.durationHours!.toStringAsFixed(0)} ч',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.secondaryText),
                             ),
                             const SizedBox(width: 16),
                           ],
+                          const Icon(Icons.location_on,
+                              size: 14, color: AppTheme.secondaryText),
+                          const SizedBox(width: 4),
                           Text(
-                            '\$${excursion['price'] ?? '—'}',
-                            style: TextStyle(
+                            excursion.city,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.secondaryText),
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            '\$${excursion.price.toStringAsFixed(0)}',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: AppTheme.primary,
+                              color: AppTheme.primaryColor,
                             ),
                           ),
                         ],

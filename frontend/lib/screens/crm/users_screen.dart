@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/api_config.dart';
 import '../../config/theme.dart';
-import '../../services/api_service.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/api_service.dart';
 
-/// Экран управления пользователями (только для COORDINATOR и MANAGER).
-/// Таблица пользователей с возможностью изменения роли и деактивации.
+/// Экран управления пользователями (только для администраторов).
+/// Таблица пользователей с возможностью изменения роли.
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
 
@@ -25,15 +27,15 @@ class _UsersScreenState extends State<UsersScreen> {
   final Set<String> _editingRoles = {};
 
   static const List<Map<String, String>> _allRoles = [
-    {'value': 'MANAGER', 'label': 'Менеджер'},
-    {'value': 'COORDINATOR', 'label': 'Координатор'},
-    {'value': 'FLIGHTS_MANAGER', 'label': 'Менеджер авиабилетов'},
-    {'value': 'HOTELS_MANAGER', 'label': 'Менеджер отелей'},
-    {'value': 'CLINICS_MANAGER', 'label': 'Менеджер клиник'},
-    {'value': 'DOCTORS_MANAGER', 'label': 'Менеджер врачей'},
-    {'value': 'VISAS_MANAGER', 'label': 'Менеджер виз'},
-    {'value': 'EXCURSIONS_MANAGER', 'label': 'Менеджер экскурсий'},
-    {'value': 'CLIENT', 'label': 'Клиент'},
+    {'value': 'manager', 'label': 'Менеджер'},
+    {'value': 'coordinator', 'label': 'Координатор'},
+    {'value': 'flights_manager', 'label': 'Менеджер авиабилетов'},
+    {'value': 'hotels_manager', 'label': 'Менеджер отелей'},
+    {'value': 'clinics_manager', 'label': 'Менеджер клиник'},
+    {'value': 'doctors_manager', 'label': 'Менеджер врачей'},
+    {'value': 'visas_manager', 'label': 'Менеджер виз'},
+    {'value': 'excursions_manager', 'label': 'Менеджер экскурсий'},
+    {'value': 'client', 'label': 'Клиент'},
   ];
 
   @override
@@ -44,11 +46,11 @@ class _UsersScreenState extends State<UsersScreen> {
 
   void _checkAccessAndFetch() {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final role = auth.currentUser?.role;
-    if (role != 'COORDINATOR' && role != 'MANAGER') {
+    final user = auth.currentUser;
+    if (user == null || !user.isAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          Navigator.of(context).pushReplacementNamed('/crm/orders');
+          context.go('/crm/orders');
         }
       });
       return;
@@ -63,7 +65,7 @@ class _UsersScreenState extends State<UsersScreen> {
     });
 
     try {
-      final data = await _api.get('/users');
+      final data = await _api.get(ApiConfig.auth, '/users');
       setState(() {
         _users =
             data['items'] as List<dynamic>? ?? data as List<dynamic>? ?? [];
@@ -79,7 +81,11 @@ class _UsersScreenState extends State<UsersScreen> {
 
   Future<void> _updateRole(String userId, String newRole) async {
     try {
-      await _api.patch('/users/$userId', body: {'role': newRole});
+      await _api.put(
+        ApiConfig.auth,
+        '/users/$userId/role',
+        body: {'role': newRole},
+      );
       setState(() => _editingRoles.remove(userId));
       _fetchUsers();
       if (mounted) {
@@ -91,28 +97,6 @@ class _UsersScreenState extends State<UsersScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ошибка обновления роли: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _toggleActive(String userId, bool isActive) async {
-    try {
-      await _api.patch('/users/$userId', body: {'is_active': !isActive});
-      _fetchUsers();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isActive ? 'Пользователь деактивирован' : 'Пользователь активирован',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
         );
       }
     }
@@ -231,7 +215,6 @@ class _UsersScreenState extends State<UsersScreen> {
               DataColumn(label: Text('Имя')),
               DataColumn(label: Text('Роль')),
               DataColumn(label: Text('Статус')),
-              DataColumn(label: Text('Действия')),
             ],
             rows: _users.map<DataRow>((user) => _buildRow(user)).toList(),
           ),
@@ -321,23 +304,6 @@ class _UsersScreenState extends State<UsersScreen> {
             ),
           ),
         ),
-        DataCell(
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextButton(
-                onPressed: () => _toggleActive(userId, isActive),
-                child: Text(
-                  isActive ? 'Деактивировать' : 'Активировать',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isActive ? AppTheme.errorColor : AppTheme.primaryColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
@@ -351,7 +317,7 @@ class _UsersScreenState extends State<UsersScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppTheme.primaryColor.withValues(alpha: 0.1),
+        color: AppTheme.primaryColor.withOpacity(0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
