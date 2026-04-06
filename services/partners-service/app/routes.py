@@ -117,7 +117,7 @@ async def create_flight_offer(
 
     # Добавляем идентификатор партнёра в данные предложения
     payload["partner_id"] = str(partner_id)
-    return await _proxy_to_travel_service("/travel/flights", payload)
+    return await _proxy_to_travel_service("/travel/flights/", payload)
 
 
 @router.post("/partners/{partner_id}/offers/hotel")
@@ -133,7 +133,7 @@ async def create_hotel_offer(
         raise HTTPException(status_code=403, detail="Партнёр деактивирован")
 
     payload["partner_id"] = str(partner_id)
-    return await _proxy_to_travel_service("/travel/hotels", payload)
+    return await _proxy_to_travel_service("/travel/hotels/", payload)
 
 
 @router.post("/partners/{partner_id}/offers/clinic")
@@ -149,7 +149,7 @@ async def create_clinic_offer(
         raise HTTPException(status_code=403, detail="Партнёр деактивирован")
 
     payload["partner_id"] = str(partner_id)
-    return await _proxy_to_travel_service("/travel/clinics", payload)
+    return await _proxy_to_travel_service("/travel/clinics/", payload)
 
 
 @router.post("/partners/{partner_id}/offers/excursion")
@@ -165,4 +165,4 @@ async def create_excursion_offer(
         raise HTTPException(status_code=403, detail="Партнёр деактивирован")
 
     payload["partner_id"] = str(partner_id)
-    return await _proxy_to_travel_service("/travel/excursions", payload)
+    return await _proxy_to_travel_service("/travel/excursions/", payload)

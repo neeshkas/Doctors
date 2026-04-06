@@ -39,7 +39,7 @@ services:
   # Auth Service
   # ============================================================
   auth-service:
-    build: ./auth-service
+    build: ./services/auth-service
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@auth-db:5432/auth_db
     depends_on:
@@ -68,7 +68,7 @@ services:
   # Clients Service
   # ============================================================
   clients-service:
-    build: ./clients-service
+    build: ./services/clients-service
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@clients-db:5432/clients_db
       - AUTH_SERVICE_URL=http://auth-service:8000
@@ -98,7 +98,7 @@ services:
   # Services Service (каталог медицинских услуг)
   # ============================================================
   services-service:
-    build: ./services-service
+    build: ./services/services-service
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@services-db:5432/services_db
     depends_on:
@@ -127,7 +127,7 @@ services:
   # Travel Service (авиабилеты, отели, клиники, врачи, визы, экскурсии)
   # ============================================================
   travel-service:
-    build: ./travel-service
+    build: ./services/travel-service
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@travel-db:5432/travel_db
     depends_on:
@@ -156,7 +156,7 @@ services:
   # Orders Service (центральный сервис заказов)
   # ============================================================
   orders-service:
-    build: ./orders-service
+    build: ./services/orders-service
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@orders-db:5432/orders_db
       - AUTH_SERVICE_URL=http://auth-service:8000
@@ -190,7 +190,7 @@ services:
   # Payments Service (оплаты и квитанции)
   # ============================================================
   payments-service:
-    build: ./payments-service
+    build: ./services/payments-service
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@payments-db:5432/payments_db
       - ORDERS_SERVICE_URL=http://orders-service:8000
@@ -220,7 +220,7 @@ services:
   # Partners Service (B2B партнёры)
   # ============================================================
   partners-service:
-    build: ./partners-service
+    build: ./services/partners-service
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@partners-db:5432/partners_db
       - TRAVEL_SERVICE_URL=http://travel-service:8000
