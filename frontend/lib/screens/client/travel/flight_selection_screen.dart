@@ -283,7 +283,7 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
                             ),
                           ),
                           Text(
-                            _formatDate(flight.departureAt),
+                            _formatDate(flight.departureDate),
                             style: const TextStyle(
                                 fontSize: 12, color: AppTheme.secondaryText),
                           ),
@@ -311,7 +311,7 @@ class _FlightSelectionScreenState extends State<FlightSelectionScreen> {
                             ),
                           ),
                           Text(
-                            _formatDate(flight.arrivalAt),
+                            _formatDate(flight.arrivalDate),
                             style: const TextStyle(
                                 fontSize: 12, color: AppTheme.secondaryText),
                           ),

@@ -246,13 +246,13 @@ class _ClinicSelectionScreenState extends State<ClinicSelectionScreen> {
                             style: const TextStyle(
                                 fontSize: 13, color: AppTheme.secondaryText),
                           ),
-                          if (clinic.phone != null) ...[
+                          if (clinic.specialization.isNotEmpty) ...[
                             const SizedBox(width: 16),
-                            const Icon(Icons.phone,
+                            const Icon(Icons.medical_services,
                                 size: 14, color: AppTheme.secondaryText),
                             const SizedBox(width: 4),
                             Text(
-                              clinic.phone!,
+                              clinic.specialization,
                               style: const TextStyle(
                                   fontSize: 13, color: AppTheme.secondaryText),
                             ),

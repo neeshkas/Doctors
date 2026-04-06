@@ -4,34 +4,34 @@
 /// Роли пользователей в системе DoctorsHunter
 enum UserRole {
   /// Координатор — полный доступ
-  coordinator('coordinator'),
+  coordinator('COORDINATOR'),
 
   /// Менеджер — широкий доступ
-  manager('manager'),
+  manager('MANAGER'),
 
   /// Менеджер перелётов
-  flightsManager('flights_manager'),
+  flightsManager('FLIGHTS_MANAGER'),
 
   /// Менеджер отелей
-  hotelsManager('hotels_manager'),
+  hotelsManager('HOTELS_MANAGER'),
 
   /// Менеджер клиник
-  clinicsManager('clinics_manager'),
+  clinicsManager('CLINICS_MANAGER'),
 
   /// Менеджер врачей
-  doctorsManager('doctors_manager'),
+  doctorsManager('DOCTORS_MANAGER'),
 
   /// Менеджер виз
-  visasManager('visas_manager'),
+  visasManager('VISAS_MANAGER'),
 
   /// Менеджер экскурсий
-  excursionsManager('excursions_manager'),
+  excursionsManager('EXCURSIONS_MANAGER'),
 
   /// Клиент — пациент или сопровождающий
-  client('client'),
+  client('CLIENT'),
 
   /// Партнёр
-  partner('partner');
+  partner('PARTNER');
 
   const UserRole(this.value);
 
@@ -41,7 +41,7 @@ enum UserRole {
   /// Создание роли из строки JSON
   static UserRole fromString(String value) {
     return UserRole.values.firstWhere(
-      (role) => role.value == value,
+      (role) => role.value == value.toUpperCase(),
       orElse: () => UserRole.client,
     );
   }
@@ -49,8 +49,8 @@ enum UserRole {
 
 /// Модель пользователя системы
 class User {
-  /// Уникальный идентификатор
-  final int id;
+  /// Уникальный идентификатор (UUID с бэкенда)
+  final String id;
 
   /// Электронная почта
   final String email;
@@ -75,7 +75,7 @@ class User {
   /// Создание из JSON-ответа API
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] as int,
+      id: json['id'].toString(),
       email: json['email'] as String,
       fullName: json['full_name'] as String,
       role: UserRole.fromString(json['role'] as String),
@@ -104,12 +104,9 @@ class User {
   bool get isCrmUser => role != UserRole.client && role != UserRole.partner;
 
   /// Проверка, может ли пользователь редактировать определённое поле/раздел
-  /// Координатор и менеджер имеют доступ ко всему;
-  /// специализированные менеджеры — только к своему разделу
   bool canEditField(String field) {
     if (isAdmin) return true;
 
-    // Сопоставление полей с ролями
     final fieldRoleMap = <String, UserRole>{
       'flights': UserRole.flightsManager,
       'hotels': UserRole.hotelsManager,

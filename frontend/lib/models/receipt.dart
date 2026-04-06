@@ -1,42 +1,28 @@
-// Модель квитанции (чека) об оплате и сводка платежей
+// Модель квитанции об оплате и сводка платежей
+// Enum-значения соответствуют бэкенду (payments-service)
 
-/// Способ оплаты
+/// Способ оплаты (соответствует PaymentMethod бэкенда)
 enum PaymentMethod {
-  /// Наличные
   cash('cash'),
-
-  /// Банковский перевод
-  bankTransfer('bank_transfer'),
-
-  /// Банковская карта
   card('card'),
-
-  /// Онлайн-оплата
-  online('online');
+  transfer('transfer'),
+  other('other');
 
   const PaymentMethod(this.value);
   final String value;
 
   static PaymentMethod fromString(String value) {
     return PaymentMethod.values.firstWhere(
-      (m) => m.value == value,
-      orElse: () => PaymentMethod.cash,
+      (m) => m.value == value.toLowerCase(),
+      orElse: () => PaymentMethod.other,
     );
   }
 }
 
-/// Статус платежа
+/// Статус платежа (соответствует PaymentStatus бэкенда)
 enum PaymentStatus {
-  /// Ожидает обработки
   pending('pending'),
-
-  /// Подтверждён
-  confirmed('confirmed'),
-
-  /// Отклонён
-  rejected('rejected'),
-
-  /// Возвращён
+  completed('completed'),
   refunded('refunded');
 
   const PaymentStatus(this.value);
@@ -44,7 +30,7 @@ enum PaymentStatus {
 
   static PaymentStatus fromString(String value) {
     return PaymentStatus.values.firstWhere(
-      (s) => s.value == value,
+      (s) => s.value == value.toLowerCase(),
       orElse: () => PaymentStatus.pending,
     );
   }
@@ -52,28 +38,13 @@ enum PaymentStatus {
 
 /// Модель квитанции (чека) об оплате
 class Receipt {
-  /// Уникальный идентификатор
-  final int id;
-
-  /// ID заказа, к которому относится платёж
-  final int orderId;
-
-  /// Сумма платежа
+  final String id;
+  final String orderId;
   final double amount;
-
-  /// Способ оплаты
   final PaymentMethod paymentMethod;
-
-  /// Статус платежа
   final PaymentStatus status;
-
-  /// Описание / комментарий к платежу
   final String? description;
-
-  /// Дата фактической оплаты
-  final DateTime? paidAt;
-
-  /// Дата создания записи
+  final DateTime paidAt;
   final DateTime createdAt;
 
   const Receipt({
@@ -83,58 +54,31 @@ class Receipt {
     required this.paymentMethod,
     required this.status,
     this.description,
-    this.paidAt,
+    required this.paidAt,
     required this.createdAt,
   });
 
   factory Receipt.fromJson(Map<String, dynamic> json) {
     return Receipt(
-      id: json['id'] as int,
-      orderId: json['order_id'] as int,
+      id: json['id'].toString(),
+      orderId: json['order_id'].toString(),
       amount: (json['amount'] as num).toDouble(),
-      paymentMethod:
-          PaymentMethod.fromString(json['payment_method'] as String),
+      paymentMethod: PaymentMethod.fromString(json['payment_method'] as String),
       status: PaymentStatus.fromString(json['status'] as String),
       description: json['description'] as String?,
-      paidAt: json['paid_at'] != null
-          ? DateTime.parse(json['paid_at'] as String)
-          : null,
+      paidAt: DateTime.parse(json['paid_at'] as String),
       createdAt: DateTime.parse(json['created_at'] as String),
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'order_id': orderId,
-      'amount': amount,
-      'payment_method': paymentMethod.value,
-      'status': status.value,
-      'description': description,
-      'paid_at': paidAt?.toIso8601String(),
-      'created_at': createdAt.toIso8601String(),
-    };
   }
 }
 
 /// Сводка по платежам для заказа
 class PaymentSummary {
-  /// ID заказа
-  final int orderId;
-
-  /// Общая сумма заказа
+  final String orderId;
   final double totalAmount;
-
-  /// Оплаченная сумма
   final double paidAmount;
-
-  /// Остаток к оплате
   final double remainingAmount;
-
-  /// Переплата (если есть)
   final double overpayment;
-
-  /// Количество квитанций
   final int receiptsCount;
 
   const PaymentSummary({
@@ -148,23 +92,12 @@ class PaymentSummary {
 
   factory PaymentSummary.fromJson(Map<String, dynamic> json) {
     return PaymentSummary(
-      orderId: json['order_id'] as int,
+      orderId: json['order_id'].toString(),
       totalAmount: (json['total_amount'] as num).toDouble(),
       paidAmount: (json['paid_amount'] as num).toDouble(),
       remainingAmount: (json['remaining_amount'] as num).toDouble(),
       overpayment: (json['overpayment'] as num?)?.toDouble() ?? 0,
       receiptsCount: json['receipts_count'] as int,
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'order_id': orderId,
-      'total_amount': totalAmount,
-      'paid_amount': paidAmount,
-      'remaining_amount': remainingAmount,
-      'overpayment': overpayment,
-      'receipts_count': receiptsCount,
-    };
   }
 }

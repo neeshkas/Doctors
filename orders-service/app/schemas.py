@@ -96,15 +96,22 @@ class OrderResponse(BaseModel):
 
 
 class OrderListResponse(BaseModel):
-    """Упрощённый ответ для табличного отображения списка заказов."""
+    """Упрощённый ответ для табличного отображения списка заказов (мастер-панель)."""
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     status: OrderStatus
     requires_travel: bool
+    flight_id: Optional[UUID] = None
+    hotel_id: Optional[UUID] = None
+    clinic_id: Optional[UUID] = None
+    doctor_id: Optional[UUID] = None
+    visa_id: Optional[UUID] = None
+    excursion_confirmed: bool = False
     total_amount: Decimal
     paid_amount: Decimal
     client_names: str  # Имена клиентов через запятую
+    service_names: str = ""  # Названия услуг через запятую
     created_at: datetime
 
 

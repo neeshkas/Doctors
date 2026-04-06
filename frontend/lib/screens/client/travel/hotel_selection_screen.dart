@@ -247,7 +247,7 @@ class _HotelSelectionScreenState extends State<HotelSelectionScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          _buildStars(hotel.stars),
+                          _buildStars(hotel.starRating),
                         ],
                       ),
                     ),

@@ -1,57 +1,33 @@
 // Модель медицинской услуги и категории
+// Категории соответствуют бэкенду
 
 /// Категория медицинской услуги
 enum ServiceCategory {
-  /// Диагностика
-  diagnostics('diagnostics'),
-
-  /// Лечение
-  treatment('treatment'),
-
-  /// Хирургия
-  surgery('surgery'),
-
-  /// Консультация
-  consultation('consultation'),
-
-  /// Реабилитация
-  rehabilitation('rehabilitation'),
-
-  /// Прочее
-  other('other');
+  onlineConsultation('ONLINE_CONSULTATION'),
+  offlineConsultation('OFFLINE_CONSULTATION'),
+  checkupKorea('CHECKUP_KOREA'),
+  treatmentKorea('TREATMENT_KOREA'),
+  examinationKorea('EXAMINATION_KOREA');
 
   const ServiceCategory(this.value);
   final String value;
 
   static ServiceCategory fromString(String value) {
     return ServiceCategory.values.firstWhere(
-      (c) => c.value == value,
-      orElse: () => ServiceCategory.other,
+      (c) => c.value == value.toUpperCase(),
+      orElse: () => ServiceCategory.onlineConsultation,
     );
   }
 }
 
 /// Модель медицинской услуги
 class MedicalService {
-  /// Уникальный идентификатор
-  final int id;
-
-  /// Категория услуги
+  final String id;
   final ServiceCategory category;
-
-  /// Название услуги
   final String name;
-
-  /// Описание
   final String? description;
-
-  /// Требуется ли транспортировка для данной услуги
   final bool requiresTravel;
-
-  /// Базовая стоимость
   final double basePrice;
-
-  /// Активна ли услуга (доступна для заказа)
   final bool isActive;
 
   const MedicalService({
@@ -66,12 +42,12 @@ class MedicalService {
 
   factory MedicalService.fromJson(Map<String, dynamic> json) {
     return MedicalService(
-      id: json['id'] as int,
+      id: json['id'].toString(),
       category: ServiceCategory.fromString(json['category'] as String),
       name: json['name'] as String,
       description: json['description'] as String?,
       requiresTravel: json['requires_travel'] as bool? ?? false,
-      basePrice: (json['base_price'] as num).toDouble(),
+      basePrice: (json['base_price'] as num?)?.toDouble() ?? 0,
       isActive: json['is_active'] as bool? ?? true,
     );
   }
@@ -87,7 +63,4 @@ class MedicalService {
       'is_active': isActive,
     };
   }
-
-  @override
-  String toString() => 'MedicalService(id: $id, name: $name)';
 }

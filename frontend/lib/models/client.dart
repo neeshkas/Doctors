@@ -3,10 +3,10 @@
 /// Модель клиента — пациент или сопровождающий
 class Client {
   /// Уникальный идентификатор клиента
-  final int id;
+  final String id;
 
-  /// ID пользователя в системе авторизации
-  final int? userId;
+  /// ID пользователя в системе авторизации (UUID)
+  final String? userId;
 
   /// Имя
   final String firstName;
@@ -60,8 +60,8 @@ class Client {
 
   factory Client.fromJson(Map<String, dynamic> json) {
     return Client(
-      id: json['id'] as int,
-      userId: json['user_id'] as int?,
+      id: json['id'].toString(),
+      userId: json['user_id']?.toString(),
       firstName: json['first_name'] as String,
       lastName: json['last_name'] as String,
       middleName: json['middle_name'] as String?,

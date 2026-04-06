@@ -16,7 +16,7 @@ class ServicesScreen extends StatefulWidget {
 class _ServicesScreenState extends State<ServicesScreen> {
   final _api = ApiService();
   List<MedicalService> _services = [];
-  final Set<int> _selectedIds = {};
+  final Set<String> _selectedIds = {};
   bool _isLoading = true;
   String? _errorMessage;
 

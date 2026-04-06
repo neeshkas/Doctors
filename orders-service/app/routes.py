@@ -81,7 +81,7 @@ async def fetch_paid_amount(order_id: UUID) -> Decimal:
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(
-                f"{settings.PAYMENTS_SERVICE_URL}/payments/order/{order_id}/total",
+                f"{settings.PAYMENTS_SERVICE_URL}/payments/summary/{order_id}",
                 timeout=10.0,
             )
         except httpx.RequestError:
@@ -95,7 +95,7 @@ async def fetch_paid_amount(order_id: UUID) -> Decimal:
         return Decimal("0")
 
     data = response.json()
-    return Decimal(str(data.get("total_paid", 0)))
+    return Decimal(str(data.get("paid_amount", 0)))
 
 
 async def get_order_or_404(order_id: UUID, db: AsyncSession) -> Order:
@@ -138,7 +138,7 @@ async def create_order(
     # Добавляем позиции заказа
     for item_data in data.items:
         service_info = await fetch_service_info(item_data.service_id)
-        price = Decimal(str(service_info.get("price", 0)))
+        price = Decimal(str(service_info.get("base_price", 0) or 0))
 
         order_item = OrderItem(
             order_id=order.id,
@@ -153,7 +153,7 @@ async def create_order(
     # Добавляем клиентов
     for i, client_id in enumerate(data.client_ids):
         client_info = await fetch_client_info(client_id)
-        client_name = client_info.get("name", "Неизвестный клиент")
+        client_name = f"{client_info.get('first_name', '')} {client_info.get('last_name', '')}".strip() or "Неизвестный клиент"
 
         order_client = OrderClient(
             order_id=order.id,
@@ -188,19 +188,97 @@ async def list_orders(
     result = await db.execute(query)
     orders = result.scalars().all()
 
-    # Формируем упрощённый ответ для списка
+    # Формируем упрощённый ответ для мастер-панели
     return [
         OrderListResponse(
             id=order.id,
             status=order.status,
             requires_travel=order.requires_travel,
+            flight_id=order.flight_id,
+            hotel_id=order.hotel_id,
+            clinic_id=order.clinic_id,
+            doctor_id=order.doctor_id,
+            visa_id=order.visa_id,
+            excursion_confirmed=order.excursion_confirmed,
             total_amount=order.total_amount,
             paid_amount=order.paid_amount,
             client_names=get_client_names(order),
+            service_names=", ".join(i.service_name for i in order.items) if order.items else "",
             created_at=order.created_at,
         )
         for order in orders
     ]
+
+
+
+# === Рабочее пространство (workspace) ===
+# ВАЖНО: этот маршрут ДОЛЖЕН быть определён ДО /{order_id}, иначе
+# FastAPI попытается распарсить "workspace" как UUID
+
+# Маппинг роли на условия фильтрации незаполненных полей
+WORKSPACE_ROLE_MAP: dict[str, dict[str, Any]] = {
+    "FLIGHTS_MANAGER": {"field": "flight_id", "requires_travel": True},
+    "HOTELS_MANAGER": {"field": "hotel_id", "requires_travel": True},
+    "CLINICS_MANAGER": {"field": "clinic_id", "requires_travel": True},
+    "DOCTORS_MANAGER": {"field": "doctor_id", "requires_travel": True},
+    "VISAS_MANAGER": {"field": "visa_id", "requires_travel": True},
+    "EXCURSIONS_MANAGER": {"field": "excursion_confirmed", "requires_travel": True},
+}
+
+
+@router.get("/workspace/{role}", response_model=list[WorkspaceTask])
+async def get_workspace_tasks(
+    role: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Получить список задач для рабочего пространства менеджера.
+    Возвращает заказы, в которых поле, соответствующее роли, ещё не заполнено.
+    """
+    role_config = WORKSPACE_ROLE_MAP.get(role.upper())
+    if not role_config:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Неизвестная роль: {role}. Доступные: {', '.join(WORKSPACE_ROLE_MAP.keys())}",
+        )
+
+    field_name = role_config["field"]
+    needs_travel = role_config["requires_travel"]
+
+    # Формируем запрос: активные (не отменённые) заказы с незаполненным полем
+    query = select(Order).where(Order.status != OrderStatus.CANCELLED)
+
+    # Для менеджеров путешествий — только заказы с requires_travel=True
+    if needs_travel:
+        query = query.where(Order.requires_travel.is_(True))
+
+    # Фильтруем по незаполненному полю
+    if field_name == "excursion_confirmed":
+        query = query.where(Order.excursion_confirmed.is_(False))
+    else:
+        column = getattr(Order, field_name)
+        query = query.where(column.is_(None))
+
+    query = query.order_by(Order.created_at.asc())
+
+    result = await db.execute(query)
+    orders = result.scalars().all()
+
+    tasks = []
+    for order in orders:
+        current_value = getattr(order, field_name)
+        tasks.append(
+            WorkspaceTask(
+                order_id=order.id,
+                client_names=get_client_names(order),
+                field_to_fill=field_name,
+                current_value=str(current_value) if current_value is not None else None,
+                created_at=order.created_at,
+            )
+        )
+
+    return tasks
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
@@ -375,77 +453,6 @@ async def remove_order_client(
     await db.flush()
 
     return {"detail": f"Клиент {client_id} удалён из заказа {order_id}"}
-
-
-# === Рабочее пространство (workspace) ===
-
-# Маппинг роли на условия фильтрации незаполненных полей
-WORKSPACE_ROLE_MAP: dict[str, dict[str, Any]] = {
-    "FLIGHTS_MANAGER": {"field": "flight_id", "requires_travel": True},
-    "HOTELS_MANAGER": {"field": "hotel_id", "requires_travel": True},
-    "CLINICS_MANAGER": {"field": "clinic_id", "requires_travel": False},
-    "DOCTORS_MANAGER": {"field": "doctor_id", "requires_travel": False},
-    "VISAS_MANAGER": {"field": "visa_id", "requires_travel": True},
-    "EXCURSIONS_MANAGER": {"field": "excursion_confirmed", "requires_travel": True},
-}
-
-
-@router.get("/workspace/{role}", response_model=list[WorkspaceTask])
-async def get_workspace_tasks(
-    role: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Получить список задач для рабочего пространства менеджера.
-    Возвращает заказы, в которых поле, соответствующее роли, ещё не заполнено.
-    """
-    role_config = WORKSPACE_ROLE_MAP.get(role.upper())
-    if not role_config:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Неизвестная роль: {role}. Доступные: {', '.join(WORKSPACE_ROLE_MAP.keys())}",
-        )
-
-    field_name = role_config["field"]
-    needs_travel = role_config["requires_travel"]
-
-    # Формируем запрос: активные (не отменённые) заказы с незаполненным полем
-    query = select(Order).where(Order.status != OrderStatus.CANCELLED)
-
-    # Для менеджеров путешествий — только заказы с requires_travel=True
-    if needs_travel:
-        query = query.where(Order.requires_travel.is_(True))
-
-    # Фильтруем по незаполненному полю
-    if field_name == "excursion_confirmed":
-        # Для экскурсий — ищем неподтверждённые
-        query = query.where(Order.excursion_confirmed.is_(False))
-    else:
-        # Для остальных — ищем NULL
-        column = getattr(Order, field_name)
-        query = query.where(column.is_(None))
-
-    query = query.order_by(Order.created_at.asc())
-
-    result = await db.execute(query)
-    orders = result.scalars().all()
-
-    # Формируем задачи
-    tasks = []
-    for order in orders:
-        current_value = getattr(order, field_name)
-        tasks.append(
-            WorkspaceTask(
-                order_id=order.id,
-                client_names=get_client_names(order),
-                field_to_fill=field_name,
-                current_value=str(current_value) if current_value is not None else None,
-                created_at=order.created_at,
-            )
-        )
-
-    return tasks
 
 
 # === Пересчёт сумм ===
