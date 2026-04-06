@@ -139,7 +139,10 @@ class ApiService {
     try {
       decoded = jsonDecode(response.body);
     } catch (_) {
-      throw ApiException(statusCode, 'Ошибка декодирования ответа');
+      throw ApiException(
+        statusCode,
+        'Ошибка сервера (HTTP $statusCode). Тело: ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+      );
     }
 
     // Успешный ответ
