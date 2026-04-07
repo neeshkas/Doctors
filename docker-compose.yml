@@ -1,5 +1,3 @@
-version: "3.9"
-
 # DoctorsHunter CRM - Docker Compose
 # Все микросервисы, базы данных и API Gateway
 
