@@ -1,20 +1,18 @@
 // Конфигурация API — базовый URL и пути к микросервисам
 // API проксируется через nginx фронтенда → нет CORS проблем
 
-import 'dart:html' show window;
-
 /// Конфигурация подключения к API DoctorsHunter
 class ApiConfig {
   ApiConfig._();
 
-  /// Базовый URL API — строится из текущего origin браузера + /api
-  /// В Docker: фронтенд на :3000, nginx проксирует /api/ → gateway
-  static String get baseUrl {
-    const envUrl = String.fromEnvironment('API_BASE_URL', defaultValue: '');
-    if (envUrl.isNotEmpty) return envUrl;
-    // Берём origin из браузера (http://localhost:3000) и добавляем /api
-    return '${window.location.origin}/api';
-  }
+  /// Базовый URL API.
+  /// Фронтенд nginx проксирует /api/ → gateway.
+  /// http пакет в Dart требует абсолютный URL,
+  /// поэтому используем http://localhost:3000/api (порт фронтенда).
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:3000/api',
+  );
 
   // Пути к микросервисам
   static const String auth = '/auth';
