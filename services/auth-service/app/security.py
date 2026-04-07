@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from typing import List
+from uuid import UUID as PyUUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -70,7 +71,7 @@ async def get_current_user(
 ) -> User:
     """Получить текущего пользователя по JWT-токену (зависимость FastAPI)."""
     token_data = decode_access_token(token)
-    result = await db.execute(select(User).where(User.id == token_data.user_id))
+    result = await db.execute(select(User).where(User.id == PyUUID(token_data.user_id)))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(
