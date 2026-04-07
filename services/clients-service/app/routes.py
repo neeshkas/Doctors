@@ -12,6 +12,42 @@ from app.schemas import ClientCreate, ClientResponse, ClientUpdate
 
 router = APIRouter(prefix="/clients", tags=["Клиенты"])
 
+# Внутренний роутер для межсервисных вызовов (без аутентификации)
+# Доступен только внутри Docker-сети, внешний доступ заблокирован на уровне nginx
+internal_router = APIRouter(prefix="/clients/internal", tags=["Internal"])
+
+
+@internal_router.get("/{client_id}", response_model=ClientResponse)
+async def get_client_internal(
+    client_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Внутренний эндпоинт: получить клиента по ID без аутентификации (для межсервисных вызовов)."""
+    result = await db.execute(select(Client).where(Client.id == client_id))
+    client = result.scalar_one_or_none()
+    if not client:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Клиент не найден",
+        )
+    return client
+
+
+@internal_router.get("/by-user/{user_id}", response_model=ClientResponse)
+async def get_client_by_user_internal(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Внутренний эндпоинт: получить клиента по user_id без аутентификации."""
+    result = await db.execute(select(Client).where(Client.user_id == user_id))
+    client = result.scalar_one_or_none()
+    if not client:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Клиент не найден",
+        )
+    return client
+
 
 @router.post("/", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
 async def create_client(

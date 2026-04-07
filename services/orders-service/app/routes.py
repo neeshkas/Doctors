@@ -27,6 +27,10 @@ from app.schemas import (
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
+# Внутренний роутер для межсервисных вызовов (без аутентификации)
+# Доступен только внутри Docker-сети, внешний доступ заблокирован на уровне nginx
+internal_router = APIRouter(prefix="/orders/internal", tags=["Internal"])
+
 
 # === Вспомогательные функции для обращения к внешним сервисам ===
 
@@ -54,11 +58,11 @@ async def fetch_service_info(service_id: UUID) -> dict[str, Any]:
 
 
 async def fetch_client_info(client_id: UUID) -> dict[str, Any]:
-    """Получает информацию о клиенте из clients-service."""
+    """Получает информацию о клиенте из clients-service (через внутренний эндпоинт без auth)."""
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(
-                f"{settings.CLIENTS_SERVICE_URL}/clients/{client_id}",
+                f"{settings.CLIENTS_SERVICE_URL}/clients/internal/{client_id}",
                 timeout=10.0,
             )
         except httpx.RequestError:
@@ -354,7 +358,7 @@ async def add_order_item(
 
     # Загружаем информацию об услуге
     service_info = await fetch_service_info(data.service_id)
-    price = Decimal(str(service_info.get("price", 0)))
+    price = Decimal(str(service_info.get("base_price", 0) or 0))
 
     item = OrderItem(
         order_id=order.id,
@@ -416,10 +420,14 @@ async def add_order_client(
     # Загружаем информацию о клиенте
     client_info = await fetch_client_info(data.client_id)
 
+    first_name = client_info.get("first_name", "")
+    last_name = client_info.get("last_name", "")
+    client_name = f"{first_name} {last_name}".strip() or "Неизвестный клиент"
+
     order_client = OrderClient(
         order_id=order.id,
         client_id=data.client_id,
-        client_name=client_info.get("name", "Неизвестный клиент"),
+        client_name=client_name,
         is_primary=data.is_primary,
     )
     db.add(order_client)
@@ -491,4 +499,16 @@ async def recalculate_order(
     await db.flush()
     await db.refresh(order)
 
+    return order
+
+
+# === Внутренние эндпоинты для межсервисных вызовов (без аутентификации) ===
+
+@internal_router.get("/{order_id}", response_model=OrderResponse)
+async def get_order_internal(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Внутренний эндпоинт: получить заказ по ID без аутентификации (для payments-service)."""
+    order = await get_order_or_404(order_id, db)
     return order

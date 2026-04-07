@@ -61,12 +61,12 @@ async def get_receipts_by_order(order_id: uuid.UUID, db: AsyncSession = Depends(
 @router.get("/payments/summary/{order_id}", response_model=OrderPaymentSummary)
 async def get_payment_summary(order_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     """Получить сводку по оплатам заказа: общая сумма, оплачено, остаток, переплата"""
-    # Получаем общую сумму заказа из сервиса заказов
+    # Получаем общую сумму заказа из сервиса заказов (через внутренний эндпоинт без auth)
     total_amount = Decimal("0.00")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{settings.ORDERS_SERVICE_URL}/orders/{order_id}"
+                f"{settings.ORDERS_SERVICE_URL}/orders/internal/{order_id}"
             )
             if response.status_code == 200:
                 order_data = response.json()
